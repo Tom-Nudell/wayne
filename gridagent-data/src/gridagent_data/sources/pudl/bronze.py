@@ -20,7 +20,8 @@ from dataclasses import asdict, dataclass
 
 import httpx
 
-from gridagent_data.paths import BRONZE, ensure_dirs
+from gridagent_data import paths as _paths
+from gridagent_data.paths import ensure_dirs
 from gridagent_data.provenance import PUDL, now_utc
 
 
@@ -57,7 +58,7 @@ def fetch_table(table: PudlTable, *, client: httpx.Client | None = None) -> dict
     Returns the manifest dict for inclusion in the asset's metadata.
     """
     ensure_dirs()
-    target_dir = BRONZE / "pudl" / table.name
+    target_dir = _paths.BRONZE / "pudl" / table.name
     target_dir.mkdir(parents=True, exist_ok=True)
     parquet_path = target_dir / f"{table.name}.parquet"
 
@@ -106,7 +107,7 @@ def fetch_table(table: PudlTable, *, client: httpx.Client | None = None) -> dict
         "etag": etag,
         "bytes": content_length or parquet_path.stat().st_size,
         "retrieved_at": now_utc().isoformat(),
-        "path": str(parquet_path.relative_to(BRONZE.parent)),
+        "path": str(parquet_path.relative_to(_paths.BRONZE.parent)),
     }
     (target_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
     return manifest

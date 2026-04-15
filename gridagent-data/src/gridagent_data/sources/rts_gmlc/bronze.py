@@ -11,7 +11,8 @@ from dataclasses import asdict, dataclass
 
 import httpx
 
-from gridagent_data.paths import BRONZE, ensure_dirs
+from gridagent_data import paths as _paths
+from gridagent_data.paths import ensure_dirs
 from gridagent_data.provenance import Source, now_utc
 
 RTS_GMLC = Source(
@@ -42,7 +43,7 @@ FILES: tuple[RtsFile, ...] = (
 def fetch_all(*, client: httpx.Client | None = None) -> list[dict]:
     """Download every RTS-GMLC source CSV into bronze. Returns manifests."""
     ensure_dirs()
-    target_dir = BRONZE / "rts_gmlc"
+    target_dir = _paths.BRONZE / "rts_gmlc"
     target_dir.mkdir(parents=True, exist_ok=True)
 
     own_client = client is None
@@ -63,7 +64,7 @@ def fetch_all(*, client: httpx.Client | None = None) -> list[dict]:
                     "url": url,
                     "bytes": len(response.content),
                     "retrieved_at": now_utc().isoformat(),
-                    "path": str(target.relative_to(BRONZE.parent)),
+                    "path": str(target.relative_to(_paths.BRONZE.parent)),
                 }
             )
     finally:

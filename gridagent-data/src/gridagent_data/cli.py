@@ -2,11 +2,16 @@
 
 Subcommands:
 
-* ``ingest pudl``      — fetch every table listed in ``sources.pudl.bronze.TABLES``.
-* ``ingest rts_gmlc``  — fetch the RTS-GMLC source CSVs.
-* ``snapshot rts``     — assemble the canonical Snapshot bundle from RTS-GMLC bronze.
-* ``dbt build``        — run the dbt silver→gold transforms over bronze parquet/CSV.
-* ``list``             — show what's in BUNDLE.
+* ``ingest pudl``            — PUDL parquet release → bronze.
+* ``ingest rts_gmlc``        — RTS-GMLC source CSVs → bronze.
+* ``ingest gridstatus``      — GridStatus daily CSVs → bronze (one ISO, one day).
+* ``ingest lbnl``            — LBNL Queued Up workbook → bronze.
+* ``ingest hifld``           — HIFLD archived substations + transmission → bronze.
+* ``ingest osm``             — OSM ``power=*`` Overpass query for a region → bronze.
+* ``ingest pypsa_usa PATH``  — adopt a pre-built ``elec.nc`` into bronze.
+* ``snapshot rts``           — assemble a Snapshot bundle from RTS-GMLC bronze.
+* ``dbt <subcommand>``       — run dbt against the in-tree project.
+* ``list``                   — show what's in BUNDLE.
 
 Heavier orchestration (silver dbt models, gold marts, scheduling) lives in
 the Dagster job graph; the CLI is for the bring-up path and developer loops.
@@ -40,6 +45,66 @@ def cmd_ingest_rts() -> int:
     print("Fetching RTS-GMLC source CSVs…")
     for m in fetch_all():
         print(f"  · {m['file']}: {m['bytes']} bytes → {m['path']}")
+    return 0
+
+
+def cmd_ingest_gridstatus(iso: str, dataset: str, day: str) -> int:
+    from datetime import date as _date
+
+    from gridagent_data.sources.gridstatus import GridStatusPartition, fetch_day
+
+    part = GridStatusPartition(dataset=dataset, iso=iso, day=_date.fromisoformat(day))
+    m = fetch_day(part)
+    print(f"GridStatus {part.iso}/{part.dataset}/{part.day}: {m['bytes']} bytes → {m['path']}")
+    return 0
+
+
+def cmd_ingest_lbnl() -> int:
+    from gridagent_data.sources.lbnl import fetch_release
+
+    m = fetch_release()
+    print(f"LBNL Queued Up release {m['release_year']}: {m['bytes']} bytes → {m['path']}")
+    return 0
+
+
+def cmd_ingest_hifld() -> int:
+    from gridagent_data.sources.hifld import LAYERS, fetch_layer
+
+    for layer in LAYERS:
+        m = fetch_layer(layer)
+        print(f"HIFLD {layer.name}: {m['bytes']} bytes → {m['path']}")
+    return 0
+
+
+def cmd_ingest_osm(region_name: str | None) -> int:
+    from gridagent_data.sources.osm import REGIONS, fetch_region
+
+    selected = (
+        [r for r in REGIONS if r.name == region_name] if region_name else list(REGIONS)
+    )
+    if not selected:
+        print(f"Unknown OSM region '{region_name}'. Known: {[r.name for r in REGIONS]}")
+        return 2
+    for region in selected:
+        m = fetch_region(region)
+        print(
+            f"OSM {region.name}: {m['bytes']} bytes, "
+            f"elements={m.get('element_counts', {})} → {m['path']}"
+        )
+    return 0
+
+
+def cmd_ingest_pypsa_usa(source_path: str | None, *, label: str) -> int:
+    from gridagent_data.sources.pypsa_usa import adopt_elec_nc, fetch_elec_nc
+
+    if not source_path:
+        print("ingest pypsa_usa requires a path to elec.nc (or a URL with --url).")
+        return 2
+    if source_path.startswith(("http://", "https://")):
+        m = fetch_elec_nc(source_path, label=label)
+    else:
+        m = adopt_elec_nc(source_path, label=label)
+    print(f"PyPSA-USA elec.nc ({m['ingest_mode']}): {m['bytes']} bytes → {m['path']}")
     return 0
 
 
@@ -85,7 +150,20 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     ing = sub.add_parser("ingest", help="Pull a source into bronze.")
-    ing.add_argument("source", choices=["pudl", "rts_gmlc"])
+    ing.add_argument(
+        "source",
+        choices=["pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm", "pypsa_usa"],
+    )
+    ing.add_argument("path", nargs="?", help="Source path / URL (for pypsa_usa).")
+    ing.add_argument("--iso", default="ercot", help="ISO code (gridstatus only).")
+    ing.add_argument(
+        "--dataset", default="lmp_hourly", help="GridStatus dataset slug."
+    )
+    ing.add_argument("--day", default=None, help="ISO date (gridstatus only).")
+    ing.add_argument("--region", default=None, help="OSM region name (osm only).")
+    ing.add_argument(
+        "--label", default="default", help="Sub-label under bronze (pypsa_usa only)."
+    )
 
     snap = sub.add_parser("snapshot", help="Build a canonical Snapshot bundle.")
     snap.add_argument("from_source", choices=["rts"])
@@ -107,6 +185,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ingest_pudl()
     if args.cmd == "ingest" and args.source == "rts_gmlc":
         return cmd_ingest_rts()
+    if args.cmd == "ingest" and args.source == "gridstatus":
+        if not args.day:
+            parser.error("ingest gridstatus requires --day YYYY-MM-DD")
+        return cmd_ingest_gridstatus(args.iso, args.dataset, args.day)
+    if args.cmd == "ingest" and args.source == "lbnl":
+        return cmd_ingest_lbnl()
+    if args.cmd == "ingest" and args.source == "hifld":
+        return cmd_ingest_hifld()
+    if args.cmd == "ingest" and args.source == "osm":
+        return cmd_ingest_osm(args.region)
+    if args.cmd == "ingest" and args.source == "pypsa_usa":
+        return cmd_ingest_pypsa_usa(args.path, label=args.label)
     if args.cmd == "snapshot" and args.from_source == "rts":
         return cmd_snapshot_rts()
     if args.cmd == "dbt":
