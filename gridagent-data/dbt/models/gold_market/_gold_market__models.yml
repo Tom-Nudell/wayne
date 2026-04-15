@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: gold_market__lmp_hourly
+    description: |
+      Hourly LMPs by ISO + pricing node. Stub schema until the GridStatus
+      bronze loader lands; downstream tools and tests bind to this contract
+      now so the wiring is in place.
+    columns:
+      - name: iso
+        description: One of CAISO, ERCOT, MISO, NYISO, PJM, ISO-NE, SPP.
+      - name: node
+        description: ISO-specific pricing node identifier.
+      - name: interval_start_utc
+        description: Inclusive start of the LMP interval, UTC.
+      - name: lmp_usd_per_mwh

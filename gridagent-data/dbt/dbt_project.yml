@@ -1,0 +1,32 @@
+name: gridagent_data
+version: 0.0.1
+config-version: 2
+
+profile: gridagent_data
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  gridagent_data:
+    silver:
+      +materialized: table
+      +schema: silver
+    gold_network:
+      +materialized: table
+      +schema: gold_network
+    gold_atlas:
+      +materialized: table
+      +schema: gold_atlas
+    gold_market:
+      +materialized: table
+      +schema: gold_market

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>gridagent atlas</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" />
+    <style>
+      html, body, #map { margin: 0; padding: 0; height: 100%; }
+      body { font-family: system-ui, sans-serif; }
+      #panel {
+        position: absolute; top: 12px; left: 12px; z-index: 10;
+        background: rgba(20, 22, 30, 0.85); color: #fff;
+        padding: 10px 14px; border-radius: 6px; max-width: 280px;
+        font-size: 13px; line-height: 1.4;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="panel">
+      <strong>gridagent atlas</strong><br />
+      Layers load from <code>VITE_TILE_BASE</code> · queries via DuckDB-WASM
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

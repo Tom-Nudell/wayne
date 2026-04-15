@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: gold_network__generators
+    description: |
+      Canonical generator dimension for analysis-grade studies. Sienna-bound
+      via ``gridagent_data.exporters.to_sienna``. Each row carries a
+      ``sources`` array; downstream tools can join provenance back to the
+      atlas mart.
+    columns:
+      - name: generator_id
+        description: Stable canonical ID, prefix-namespaced by source family.
+        tests:
+          - not_null
+          - unique
+      - name: capacity_mw
+        tests: [not_null]
+      - name: sources
+        description: Array of source names that contributed to this row.
+        tests: [not_null]

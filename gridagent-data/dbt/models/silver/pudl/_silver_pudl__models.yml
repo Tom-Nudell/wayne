@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: silver_pudl__eia860_generators
+    description: |
+      Latest EIA-860 generator-level snapshot per (plant_id_eia, generator_id).
+      Sourced from PUDL's ``core_eia860__scd_generators`` parquet.
+    columns:
+      - name: plant_id_eia
+        description: EIA plant ID.
+        tests: [not_null]
+      - name: generator_id
+        description: Generator ID within the plant.
+        tests: [not_null]
+      - name: capacity_mw
+        description: Nameplate capacity (MW).
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              expression: ">= 0"
+      - name: source
+        tests:
+          - accepted_values:
+              values: ['pudl']
+      - name: license
+        tests:
+          - accepted_values:
+              values: ['CC-BY-4.0']
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [plant_id_eia, generator_id]

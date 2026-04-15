@@ -1,0 +1,12 @@
+version: 2
+
+# We treat bronze parquet as external sources rather than dbt models so the
+# Dagster bronze job owns materialisation and dbt owns transformation.
+sources:
+  - name: bronze_pudl
+    description: PUDL parquet release pulled by the Dagster bronze_pudl assets.
+    meta:
+      external_location: "{{ env_var('GRIDAGENT_DATA_ROOT', '../data_root') }}/bronze/pudl"
+    tables:
+      - name: core_eia860__scd_generators
+        description: EIA-860 generator-level annual snapshot.

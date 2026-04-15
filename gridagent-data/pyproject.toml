@@ -1,0 +1,41 @@
+[project]
+name = "gridagent-data"
+version = "0.0.1"
+description = "ETL pipeline producing canonical network/atlas/market marts for the gridagent platform"
+requires-python = ">=3.11"
+dependencies = [
+    "dagster>=1.8",
+    "dagster-webserver>=1.8",
+    "dagster-duckdb>=0.24",
+    "dagster-dbt>=0.24",
+    "dbt-core>=1.8",
+    "dbt-duckdb>=1.8",
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pyarrow>=17",
+    "geopandas>=1.0",
+    "shapely>=2.0",
+    "pydantic>=2.8",
+    "httpx>=0.27",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gridagent_data"]
+
+[tool.dagster]
+module_name = "gridagent_data.definitions"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

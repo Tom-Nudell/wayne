@@ -1,0 +1,12 @@
+# gridagent-data
+data_root/
+target/
+dbt_packages/
+logs/
+.dagster/
+*.egg-info/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.duckdb*

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.vite/
+public/tiles/
+public/data/
+*.log

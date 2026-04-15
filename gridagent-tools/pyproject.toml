@@ -1,0 +1,21 @@
+[project]
+name = "gridagent-tools"
+version = "0.0.1"
+description = "Typed tool surface (data/scenario/study) over the gridagent platform"
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.1",
+    "pandas>=2.2",
+    "pydantic>=2.8",
+    "anyio>=4.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gridagent_tools"]

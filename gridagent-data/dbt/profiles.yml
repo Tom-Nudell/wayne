@@ -1,0 +1,13 @@
+gridagent_data:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Resolved at runtime to ``$GRIDAGENT_DATA_ROOT/warehouse.duckdb`` (or the
+      # default under ``../data_root/`` when the env var is unset). Override per
+      # environment with ``DBT_DUCKDB_PATH``.
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data_root/warehouse.duckdb') }}"
+      threads: 4
+      extensions:
+        - spatial
+        - parquet
