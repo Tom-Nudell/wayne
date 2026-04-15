@@ -250,10 +250,15 @@ def make_agent(
     def run_production_cost(
         ctx: RunContext[OrchestratorDeps],
         scenario_id: str,
-        executor: str = "sienna",
+        executor: str = "pandapower",
         horizon_hours: int = 24,
     ) -> Any:
-        """UC + ED production cost simulation. Sienna backend only."""
+        """Production-cost simulation over ``horizon_hours``.
+
+        Default pandapower backend solves an hourly DC-OPF sweep — no UC,
+        no ramping, no reserves. Swap to the Sienna backend once the
+        container is wired up; the shape of the result is identical.
+        """
         result = TOOL_REGISTRY["run_production_cost"].fn(
             scenario_id=scenario_id, executor=executor, horizon_hours=horizon_hours
         )

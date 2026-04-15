@@ -84,4 +84,18 @@ assert n1_stress.signal["n_overloads"] >= n1_base.signal["n_overloads"], (
     f"{n1_stress.signal['n_overloads']} vs {n1_base.signal['n_overloads']}"
 )
 assert n1_base.signal["monotone"] and n1_stress.signal["monotone"], "Ranking must be monotone."
+
+# 6. Production-cost sweep (pandapower DC-OPF stopgap).
+pcm = TOOL_REGISTRY["run_production_cost"].fn(
+    scenario_id=baseline_id, executor="pandapower", horizon_hours=6
+)
+print(f"run_production_cost(baseline, 6h) → signal={pcm.signal}")
+print(
+    f"  total_cost=${pcm.value['total_cost_usd']:,.0f}  "
+    f"hours_solved={pcm.signal['n_hours_solved']}/{pcm.signal['n_hours']}"
+)
+assert pcm.signal["n_hours_solved"] == 6, "OPF should solve all 6 hours on baseline."
+assert pcm.signal["solver_status"] == "OPTIMAL", f"Unexpected status: {pcm.signal}"
+assert pcm.signal["slack_mw"] < 1.0, f"Balance residual too large: {pcm.signal['slack_mw']}"
+
 print("OK — all signals consistent and rankings monotone.")

@@ -12,10 +12,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 from ..snapshot import Snapshot
-from .protocol import Backend, BackendUnavailable, register_backend
+from .protocol import BackendUnavailable, register_backend
 
 
 def _import_pandapower():
@@ -60,10 +59,14 @@ def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
         idx = pp.create_bus(net, vn_kv=float(row.base_kv), name=str(row.bus_id), zone=str(row.zone or ""))
         bus_idx[str(row.bus_id)] = idx
 
-    # Pick a slack bus: largest generator's bus, deterministic by generator_id.
-    slack_gen = gens.sort_values(["p_max_mw", "generator_id"], ascending=[False, True]).iloc[0]
-    slack_bus_idx = bus_idx[str(slack_gen.bus_id)]
-    pp.create_ext_grid(net, bus=slack_bus_idx, vm_pu=1.0, name="slack")
+    # Pick a slack: largest generator, deterministic by generator_id. We mark
+    # it ``slack=True`` rather than spawning an ``ext_grid``, so OPF sees a
+    # bounded dispatchable unit (with a real cost curve) at this bus — no
+    # infinite penalty slack distorting the objective.
+    slack_gen_row = gens.sort_values(
+        ["p_max_mw", "generator_id"], ascending=[False, True]
+    ).iloc[0]
+    slack_generator_id = str(slack_gen_row.generator_id)
 
     branch_id_to_pp: dict[str, int] = {}
     for row in branches.itertuples(index=False):
@@ -104,6 +107,9 @@ def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
             max_p_mw=float(row.p_max_mw),
             min_p_mw=float(row.p_min_mw),
             name=str(row.generator_id),
+            type=str(getattr(row, "fuel", "") or ""),  # used by OPF for cost lookup
+            slack=(str(row.generator_id) == slack_generator_id),
+            vm_pu=1.0,
         )
 
     for row in loads.itertuples(index=False):
@@ -250,13 +256,138 @@ class PandapowerBackend:
 
     def production_cost(
         self, snapshot: Snapshot, scenario: dict[str, Any], *, horizon_hours: int = 24
-    ) -> dict[str, Any]:  # pragma: no cover
-        # Production cost is out of scope for the in-process backend in v1.
-        # Sienna (PowerSimulations.jl + HiGHS) is the right home for this.
-        raise NotImplementedError(
-            "production_cost not implemented in pandapower backend; "
-            "use the 'sienna' backend (requires Julia)."
-        )
+    ) -> dict[str, Any]:
+        """Hourly DC-OPF sweep as a production-cost stopgap.
+
+        This is *not* a full unit-commitment model. It solves an independent
+        single-period DC-OPF per hour, so there are no ramping constraints,
+        no min-up/down, and no reserves. It exists so the agent surface is
+        fully callable before the Sienna (PowerSimulations.jl) container
+        backend lands. Same ``value`` / ``signal`` shape, so trajectories
+        don't change when we swap in the high-fidelity backend.
+
+        Hourly load pattern is a simple diurnal multiplier applied to the
+        snapshot's load; swap in a real profile from ``gold.market`` once
+        that mart exists.
+
+        Marginal costs are per-fuel placeholders until EIA-923 heat rates +
+        ATB fuel prices are wired in via ``gold.market.generator_costs``.
+        """
+        pp = _import_pandapower()
+
+        base_net, _, _ = _build_net(snapshot, scenario)
+        _attach_costs(base_net)
+
+        profile = _diurnal_profile(horizon_hours)
+        base_load_p = base_net.load["p_mw"].to_numpy().copy()
+        base_load_q = base_net.load["q_mvar"].to_numpy().copy()
+
+        hours: list[dict[str, Any]] = []
+        total_cost = 0.0
+        total_slack = 0.0
+        solver_status = "OPTIMAL"
+        worst_slack = 0.0
+
+        for hour, mult in enumerate(profile):
+            base_net.load["p_mw"] = base_load_p * mult
+            base_net.load["q_mvar"] = base_load_q * mult
+            try:
+                pp.rundcopp(base_net)
+                converged = bool(base_net.OPF_converged)
+            except Exception as exc:  # noqa: BLE001 -- report as solver failure
+                solver_status = f"ERROR: {exc}"
+                converged = False
+
+            if not converged:
+                solver_status = "INFEASIBLE"
+                hours.append({"hour": hour, "converged": False})
+                continue
+
+            hour_cost = float(base_net.res_cost)
+            total_cost += hour_cost
+            gen_p = base_net.res_gen["p_mw"].to_numpy() if not base_net.res_gen.empty else np.array([])
+            load_p = base_net.res_load["p_mw"].to_numpy() if not base_net.res_load.empty else np.array([])
+            # Balance residual: in DC OPF without losses, gen should equal
+            # load exactly. Any residual is numerical; > a few MW means the
+            # problem was infeasible and the solver hit a bound.
+            slack_p = abs(float(gen_p.sum()) - float(load_p.sum()))
+            total_slack += slack_p
+            worst_slack = max(worst_slack, slack_p)
+
+            hours.append(
+                {
+                    "hour": hour,
+                    "converged": True,
+                    "load_multiplier": float(mult),
+                    "cost_usd": hour_cost,
+                    "slack_mw": slack_p,
+                }
+            )
+
+        converged_hours = [h for h in hours if h.get("converged")]
+
+        return {
+            "value": {
+                "horizon_hours": horizon_hours,
+                "total_cost_usd": total_cost,
+                "hours": hours,
+                "backend_note": (
+                    "pandapower DC-OPF stopgap: no UC, no ramping, no reserves; "
+                    "costs are per-fuel placeholders; LMP duals not populated "
+                    "(use the sienna backend once available for real LMPs)."
+                ),
+            },
+            "signal": {
+                "solver_status": solver_status,
+                "objective": total_cost,
+                "slack_mw": worst_slack,
+                "n_hours_solved": len(converged_hours),
+                "n_hours": horizon_hours,
+            },
+        }
+
+
+# Per-fuel marginal cost placeholder ($/MWh). Replace with EIA-923 heat rate ×
+# ATB fuel price once ``gold.market.generator_costs`` is wired in.
+_FUEL_COST_USD_PER_MWH: dict[str, float] = {
+    "solar": 0.0,
+    "wind": 0.0,
+    "hydro": 5.0,
+    "nuclear": 10.0,
+    "coal": 30.0,
+    "gas": 50.0,
+    "ng": 50.0,
+    "natural_gas": 50.0,
+    "oil": 120.0,
+    "biomass": 40.0,
+    "geothermal": 15.0,
+    "storage": 0.0,
+}
+_DEFAULT_FUEL_COST = 40.0
+
+
+def _attach_costs(net) -> None:
+    """Attach per-generator polycost rows so ``rundcopp`` has an objective.
+
+    Fuel label is stored on the gen's ``type`` column by ``_build_net``; we
+    normalize (lower-case, strip) and look it up in the cost table.
+    """
+    pp = _import_pandapower()
+    for gen_idx in net.gen.index:
+        fuel = str(net.gen.at[gen_idx, "type"] or "").strip().lower()
+        cost = _FUEL_COST_USD_PER_MWH.get(fuel, _DEFAULT_FUEL_COST)
+        pp.create_poly_cost(net, gen_idx, "gen", cp1_eur_per_mw=cost)
+
+
+def _diurnal_profile(horizon_hours: int) -> np.ndarray:
+    """Simple 24-hour diurnal load multiplier, repeated to fill the horizon.
+
+    Peaks at hour 18 (~1.15×), trough at hour 4 (~0.80×). Deliberately
+    tame — the real profile comes from ``gold.market`` once GridStatus is
+    wired in. Same shape for any horizon so runs are reproducible.
+    """
+    hours = np.arange(horizon_hours)
+    return 1.0 + 0.175 * np.cos((hours - 18) * 2 * np.pi / 24.0) - 0.025
 
 
 register_backend(PandapowerBackend())
