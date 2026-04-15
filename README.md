@@ -86,6 +86,70 @@ a quiet base. Working notes in `gridagent-atlas/BRANDING.md`.
 - NREL Sienna: https://nrel-sienna.github.io/PowerSystems.jl/
 - PowerSimData (read-only inspiration): `../powersimdata/`
 
+## Desktop bring-up
+
+End-to-end from a blank checkout. Everything below runs on a laptop — no
+cloud, no API keys, no GPU. Pick either the **data-only** or the **full
+agent** path depending on what you want to exercise.
+
+### Prerequisites
+
+- Python 3.11 + [`uv`](https://docs.astral.sh/uv/) (0.8.x)
+- Node 20+ (for the atlas)
+- Julia 1.10 (optional; only needed once we wire the Sienna backend in
+  Phase 2–3; the pandapower backend stopgap in `gridagent-tools` runs
+  without it)
+- Ollama or another OpenAI-compatible local LLM server (only for the
+  agent path; the offline smoke test drives the exact same tool surface
+  via `FunctionModel` so CI doesn't need a GPU)
+
+### Data + dbt + atlas
+
+```bash
+cd gridagent/gridagent-data
+uv sync && source .venv/bin/activate
+
+# Bronze: pull RTS-GMLC (fast, ~100 KB) and PUDL (slower, ~500 MB).
+python -m gridagent_data.cli ingest rts_gmlc
+python -m gridagent_data.cli ingest pudl
+
+# Silver + gold: dbt build reads from data_root/bronze and writes to
+# data_root/warehouse.duckdb.
+python -m gridagent_data.cli dbt build
+
+# Atlas bundle: bundle.duckdb + one PMTiles per layer.
+python -m gridagent_data.cli bundle --atlas-public ../gridagent-atlas/public
+
+cd ../gridagent-atlas && npm install && npm run dev
+# → http://localhost:5173 with RTS-GMLC substations and lines rendered.
+```
+
+### Agent loop
+
+Offline (no LLM, scripted plan — the CI path):
+
+```bash
+cd gridagent
+python _orchestrator_smoke.py
+# → Episode <id> OK; 4 tool calls executed.
+```
+
+Live (local LLM via Ollama, default model `gemma4:e12b`):
+
+```bash
+# Start the LLM server in one terminal:
+ollama serve &
+ollama pull gemma3:12b  # or any tool-calling model; override with
+                        # GRIDAGENT_LLM_MODEL / GRIDAGENT_LLM_BASE_URL
+
+# In another terminal:
+cd gridagent
+python -m gridagent_orchestrator.run \
+    --goal "Load the RTS-GMLC snapshot, create a baseline scenario, and
+            run an N-1 contingency screen. Summarise the worst overload."
+# → Episode log at data_root/episodes/<id>.jsonl plus a plain-text summary.
+```
+
 ## Repo conventions
 
 - Python: `uv` for dependency management, `ruff` lint, `pytest`.
