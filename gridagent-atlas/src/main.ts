@@ -146,7 +146,14 @@ for (const layer of ["substations", "plants", "transmission_lines"]) {
   });
 }
 
-// TODO Phase 5+: deck.gl HeatmapLayer over gold_market.lmp_hourly via DuckDB-WASM.
+// Phase 5+ seams. The data helpers are wired; the visual layers attach here
+// once the market mart carries real rows (GridStatus ingest + dbt build).
+// Keeping this as a real import (not a comment) forces the types to stay
+// in sync with src/data.ts as the mart schema evolves.
+import { fetchLmpWindow, fetchQueueSnapshot } from "./data";
+void fetchLmpWindow;   // reserved for deck.gl HeatmapLayer
+void fetchQueueSnapshot; // reserved for the queue panel
+
 // TODO Phase 5+: ?episode=<id> query string -> fetch overlay GeoJSON; use
 //                PALETTE.overload (red) and PALETTE.mitigation (green) — the
 //                only saturated colors on the map, so the eye finds them.

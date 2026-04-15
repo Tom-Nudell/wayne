@@ -11,6 +11,9 @@ Subcommands:
 * ``ingest pypsa_usa PATH``  — adopt a pre-built ``elec.nc`` into bronze.
 * ``snapshot rts``           — assemble a Snapshot bundle from RTS-GMLC bronze.
 * ``dbt <subcommand>``       — run dbt against the in-tree project.
+* ``bundle [atlas-public]``  — export warehouse → ``bundle.duckdb`` + PMTiles;
+                               optional ``--atlas-public DIR`` drops the bundle
+                               and tiles into the atlas frontend's ``public/``.
 * ``list``                   — show what's in BUNDLE.
 
 Heavier orchestration (silver dbt models, gold marts, scheduling) lives in
@@ -25,7 +28,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gridagent_data.paths import BUNDLE
+from gridagent_data.paths import BUNDLE, WAREHOUSE
 
 
 def cmd_ingest_pudl() -> int:
@@ -134,6 +137,55 @@ def cmd_dbt(subcommand: str, extra: list[str]) -> int:
     return subprocess.call(cmd, env=env)
 
 
+def cmd_bundle(
+    warehouse: Path,
+    out_dir: Path,
+    *,
+    atlas_public: Path | None = None,
+) -> int:
+    """Run both atlas exporters against ``warehouse`` into ``out_dir``.
+
+    Produces ``bundle.duckdb`` (for DuckDB-WASM) and one PMTiles file per
+    kind (for MapLibre). ``atlas_public`` is a convenience: after the
+    exporters write into ``out_dir`` we also copy the artifacts into the
+    Vite dev server's ``public/`` so the atlas picks them up on reload.
+    """
+    from gridagent_data.exporters import to_duckdb, to_pmtiles
+
+    warehouse = Path(warehouse)
+    out_dir = Path(out_dir)
+    if not warehouse.is_file():
+        print(f"Warehouse not found at {warehouse}", file=sys.stderr)
+        return 2
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    bundle_path = out_dir / "bundle.duckdb"
+    to_duckdb.export(warehouse, bundle_path)
+    print(f"Wrote {bundle_path}")
+
+    tile_dir = out_dir / "tiles"
+    tile_results = to_pmtiles.export(warehouse, tile_dir)
+    for r in tile_results:
+        suffix = r.pmtiles_path.name if r.pmtiles_path else "(geojson only; tippecanoe not on PATH)"
+        print(f"  · {r.kind}: {r.feature_count} features → {suffix}")
+
+    if atlas_public is not None:
+        atlas_public.mkdir(parents=True, exist_ok=True)
+        to_duckdb.copy_to_atlas_public(bundle_path, atlas_public)
+        # Mirror tiles alongside the bundle so the atlas's ``VITE_TILE_BASE=/tiles``
+        # default resolves without further configuration.
+        tile_public = atlas_public / "tiles"
+        tile_public.mkdir(parents=True, exist_ok=True)
+        import shutil as _shutil
+        for r in tile_results:
+            for src in filter(None, [r.geojson_path, r.pmtiles_path]):
+                if src.is_file():
+                    _shutil.copy2(src, tile_public / src.name)
+        print(f"Copied bundle + tiles into {atlas_public}")
+
+    return 0
+
+
 def cmd_list() -> int:
     BUNDLE.mkdir(parents=True, exist_ok=True)
     snapshots = sorted(p for p in BUNDLE.iterdir() if p.is_dir() and p.name.startswith("snapshot_"))
@@ -178,6 +230,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     dbt.add_argument("extra", nargs=argparse.REMAINDER, help="Extra args forwarded to dbt.")
 
+    bun = sub.add_parser(
+        "bundle",
+        help="Export warehouse → bundle.duckdb + PMTiles for the atlas frontend.",
+    )
+    bun.add_argument(
+        "--warehouse",
+        default=str(WAREHOUSE),
+        help="Path to the dbt-built warehouse.duckdb.",
+    )
+    bun.add_argument(
+        "--out",
+        default=None,
+        help="Output directory (default: $DATA_ROOT/bundle/snapshot_latest).",
+    )
+    bun.add_argument(
+        "--atlas-public",
+        default=None,
+        help="Optional path to gridagent-atlas/public/ to mirror artifacts.",
+    )
+
     sub.add_parser("list", help="List snapshot bundles.")
 
     args = parser.parse_args(argv)
@@ -201,6 +273,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_snapshot_rts()
     if args.cmd == "dbt":
         return cmd_dbt(args.subcommand, args.extra or [])
+    if args.cmd == "bundle":
+        out_dir = Path(args.out) if args.out else BUNDLE / "snapshot_latest"
+        atlas_public = Path(args.atlas_public) if args.atlas_public else None
+        return cmd_bundle(Path(args.warehouse), out_dir, atlas_public=atlas_public)
     if args.cmd == "list":
         return cmd_list()
     parser.error(f"Unknown command: {args.cmd}")

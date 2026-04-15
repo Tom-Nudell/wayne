@@ -59,4 +59,31 @@ A snapshot bundle is produced by:
 uv run dagster job execute -j build_snapshot --config date=$(date +%Y-%m-%d)
 ```
 
+### Local bring-up (desktop validation)
+
+End-to-end path from a blank machine to a browseable atlas:
+
+```bash
+# 1. Pull the source data we have loaders for (bronze layer).
+uv run python -m gridagent_data.cli ingest rts_gmlc
+uv run python -m gridagent_data.cli ingest pudl
+
+# 2. Build the silver + gold marts with dbt. Target DB lives at
+#    $DATA_ROOT/warehouse.duckdb (default: ./data_root/warehouse.duckdb).
+uv run python -m gridagent_data.cli dbt build
+
+# 3. Export the warehouse into an atlas-friendly bundle. The `bundle`
+#    command writes bundle.duckdb (DuckDB-WASM) + one PMTiles per layer,
+#    and — with --atlas-public — mirrors them into the Vite dev server.
+uv run python -m gridagent_data.cli bundle \
+    --atlas-public ../gridagent-atlas/public
+
+# 4. Run the frontend.
+cd ../gridagent-atlas && npm install && npm run dev
+```
+
+`tippecanoe` is optional at step 3: the bundle command falls back to
+writing intermediate GeoJSON (still viewable via deck.gl) so the atlas
+can render without installing the native binary first.
+
 See `../README.md` for how this fits into the wider gridagent platform.
