@@ -8,6 +8,7 @@ gridagent_data:
       # environment with ``DBT_DUCKDB_PATH``.
       path: "{{ env_var('DBT_DUCKDB_PATH', '../data_root/warehouse.duckdb') }}"
       threads: 4
-      extensions:
-        - spatial
-        - parquet
+      # DuckDB ships parquet + CSV readers in the core binary; no extension
+      # install is needed for our silver/gold models. The ``spatial``
+      # extension is loaded on demand by the tile exporter
+      # (``gridagent_data.exporters.to_pmtiles``) rather than by dbt itself.

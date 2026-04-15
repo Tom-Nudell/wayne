@@ -1,6 +1,38 @@
 version: 2
 
 models:
+  - name: gold_network__buses
+    description: |
+      Canonical bus dimension. Source-prefixed IDs keep cross-source joins
+      unambiguous as PyPSA-USA and HIFLD unification lands.
+    columns:
+      - name: bus_id
+        tests: [not_null, unique]
+      - name: base_kv
+        tests: [not_null]
+      - name: sources
+        tests: [not_null]
+
+  - name: gold_network__branches
+    description: Canonical branch dimension. Bus IDs are source-prefixed.
+    columns:
+      - name: branch_id
+        tests: [not_null, unique]
+      - name: from_bus_id
+        tests: [not_null]
+      - name: to_bus_id
+        tests: [not_null]
+      - name: rating_a_mva
+        tests: [not_null]
+
+  - name: gold_network__loads
+    description: Canonical load dimension.
+    columns:
+      - name: load_id
+        tests: [not_null, unique]
+      - name: bus_id
+        tests: [not_null]
+
   - name: gold_network__generators
     description: |
       Canonical generator dimension for analysis-grade studies. Sienna-bound

@@ -29,3 +29,32 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [plant_id_eia, generator_id]
+
+  - name: silver_pudl__eia860_plants
+    description: |
+      Latest EIA-860 plant-level snapshot per ``plant_id_eia``. Carries
+      lat/lon (for the atlas) and balancing_authority_code_eia (our
+      effective geographic dimension for joins with EIA-930 market data).
+    columns:
+      - name: plant_id_eia
+        tests: [not_null, unique]
+      - name: latitude
+        description: Plant latitude in decimal degrees (WGS-84).
+      - name: longitude
+        description: Plant longitude in decimal degrees (WGS-84).
+      - name: balancing_authority_code_eia
+        description: BA code (e.g. ERCO, CISO, PJM).
+
+  - name: silver_pudl__eia923_monthly_generation
+    description: |
+      Monthly net generation in MWh by (plant, generator). Feeds
+      gold_market aggregations and realized-capacity-factor calculations.
+    columns:
+      - name: plant_id_eia
+        tests: [not_null]
+      - name: generator_id
+        tests: [not_null]
+      - name: report_date
+        tests: [not_null]
+      - name: net_generation_mwh
+        tests: [not_null]

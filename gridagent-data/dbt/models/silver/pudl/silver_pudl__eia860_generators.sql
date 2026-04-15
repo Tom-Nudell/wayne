@@ -27,8 +27,8 @@ ranked as (
         energy_source_code_1,
         prime_mover_code,
         technology_description,
-        operating_date,
-        retirement_date,
+        current_planned_generator_operating_date as operating_date,
+        generator_retirement_date as retirement_date,
         row_number() over (
             partition by plant_id_eia, generator_id
             order by report_date desc

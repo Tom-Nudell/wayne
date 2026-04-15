@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: bronze_rts_gmlc
+    description: RTS-GMLC source CSVs pulled by the Dagster bronze_rts_gmlc assets.
+    meta:
+      external_location: "{{ env_var('GRIDAGENT_DATA_ROOT', '../data_root') }}/bronze/rts_gmlc"
+    tables:
+      - name: bus
+        description: Bus list with lat/lon, base kV, area/zone, attached load.
+      - name: branch
+        description: Branch list with R/X/B in pu and continuous/emergency ratings.
+      - name: gen
+        description: Generator list with Pmax/Pmin/Qmax/Qmin and fuel.

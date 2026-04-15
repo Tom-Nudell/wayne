@@ -10,3 +10,7 @@ sources:
     tables:
       - name: core_eia860__scd_generators
         description: EIA-860 generator-level annual snapshot.
+      - name: core_eia860__scd_plants
+        description: EIA-860 plant-level annual snapshot (lat/lon, BA, NERC region).
+      - name: core_eia923__monthly_generation
+        description: EIA-923 monthly net generation by generator.

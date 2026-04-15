@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: silver_rts_gmlc__buses
+    description: |
+      Typed RTS-GMLC bus list with lat/lon, area/zone, base kV and bus type.
+      Topological only; load is split out into ``silver_rts_gmlc__loads``.
+    columns:
+      - name: bus_id
+        tests: [not_null, unique]
+      - name: base_kv
+        tests: [not_null]
+
+  - name: silver_rts_gmlc__branches
+    description: Typed RTS-GMLC branch list with R/X/B in pu and three rating tiers.
+    columns:
+      - name: branch_id
+        tests: [not_null, unique]
+      - name: from_bus_id
+        tests: [not_null]
+      - name: to_bus_id
+        tests: [not_null]
+
+  - name: silver_rts_gmlc__generators
+    description: |
+      Typed RTS-GMLC generator list. Fuel codes normalised to ``lower_snake``
+      to match the pandapower backend's fuel-cost lookup.
+    columns:
+      - name: generator_id
+        tests: [not_null, unique]
+      - name: bus_id
+        tests: [not_null]
+      - name: p_max_mw
+        tests: [not_null]
+
+  - name: silver_rts_gmlc__loads
+    description: Loads extracted from RTS-GMLC bus PQ columns. Zero-injection rows dropped.
+    columns:
+      - name: load_id
+        tests: [not_null, unique]
+      - name: bus_id
+        tests: [not_null]

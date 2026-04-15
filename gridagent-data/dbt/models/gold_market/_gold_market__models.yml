@@ -14,3 +14,34 @@ models:
       - name: interval_start_utc
         description: Inclusive start of the LMP interval, UTC.
       - name: lmp_usd_per_mwh
+
+  - name: gold_market__load_hourly
+    description: |
+      Hourly demand by balancing authority. Populated from EIA-930 (via
+      PUDL) and GridStatus. Stub schema until loaders land.
+    columns:
+      - name: balancing_authority
+      - name: interval_start_utc
+      - name: demand_mw
+
+  - name: gold_market__generation_by_ba_hourly
+    description: |
+      Hourly generation by balancing authority + fuel type. Populated from
+      EIA-930 (via PUDL) and GridStatus. Stub schema until loaders land.
+    columns:
+      - name: balancing_authority
+      - name: interval_start_utc
+      - name: fuel_type
+      - name: generation_mwh
+
+  - name: gold_market__queue_snapshot
+    description: |
+      Interconnection queue snapshot, one row per (project_id,
+      snapshot_date). Populated from LBNL Queued Up. Stub schema until
+      loader lands.
+    columns:
+      - name: project_id
+      - name: snapshot_date
+      - name: iso_region
+      - name: queue_status
+      - name: capacity_mw
