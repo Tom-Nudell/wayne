@@ -63,14 +63,13 @@ NREL_SMART_DS = Source(
 EPRI_FEEDERS = Source(
     name="epri_feeders",
     url="https://sourceforge.net/projects/electricdss/",
-    license="various; see EPRI distribution license",
+    license="BSD-3-Clause",
+    notes="OpenDSS is BSD-3; the test feeders are EPRI-published reference cases",
 )
-GEM = Source(
-    name="gem",
-    url="https://globalenergymonitor.org/",
-    license="CC-BY-4.0",
-    notes="Some trackers require commercial license for redistribution",
-)
+
+# Sources deliberately deferred until we can confirm a fully-open subset:
+#   * Global Energy Monitor — tiered; some trackers require commercial licensing.
+# v1 stays on US public-domain + CC-BY-4.0 + ODbL only.
 
 
 def now_utc() -> datetime:

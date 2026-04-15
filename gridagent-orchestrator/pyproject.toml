@@ -5,7 +5,10 @@ description = "PowerChain-style verifiable agent loop over the gridagent tool su
 requires-python = ">=3.11"
 dependencies = [
     "gridagent-tools",
-    "anthropic>=0.34",
+    # Local-first: openai SDK speaks the OpenAI-compatible API that Ollama,
+    # vLLM, and llama.cpp all expose. Default endpoint is a local Ollama
+    # instance running an open model (Gemma family). No hosted LLM required.
+    "openai>=1.40",
     "pydantic>=2.8",
     "pyyaml>=6.0",
     "rich>=13",

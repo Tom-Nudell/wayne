@@ -2,9 +2,15 @@
  * Atlas entrypoint. Wires MapLibre + PMTiles, registers the canonical
  * gold_atlas layers, and leaves seams for the deck.gl LMP heatmap and
  * scenario-overlay integrations.
+ *
+ * Aesthetic: the grid as a living mycelial network — calm earth tones,
+ * branching hyphae for transmission, fruiting bodies for plants. Alarm
+ * colors are reserved for scenario overlays so they read against the base.
  */
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
+
+import { PALETTE } from "./theme";
 
 const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
 
@@ -12,34 +18,42 @@ const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
-const VOLTAGE_PAINT: maplibregl.LinePaint = {
+const HYPHAE_PAINT: maplibregl.LinePaint = {
+  // Voltage maps to a warm earth gradient — moss to heartwood — rather than
+  // engineering primaries. Higher voltage = older, woodier hyphae.
   "line-color": [
     "interpolate", ["linear"], ["coalesce", ["get", "voltage_kv"], 0],
-    0, "#888",
-    115, "#3b82f6",
-    230, "#10b981",
-    345, "#f59e0b",
-    500, "#ef4444",
-    765, "#a855f7",
+    0,   PALETTE.loam500,
+    115, PALETTE.hypha115,
+    230, PALETTE.hypha230,
+    345, PALETTE.hypha345,
+    500, PALETTE.hypha500,
+    765, PALETTE.hypha765,
   ],
   "line-width": [
-    "interpolate", ["linear"], ["zoom"],
-    3, 0.5,
-    8, 1.5,
-    12, 3,
+    "interpolate", ["exponential", 1.4], ["zoom"],
+    3,  0.4,
+    8,  1.6,
+    12, 3.4,
   ],
+  "line-opacity": 0.85,
+  "line-cap": "round",
+  "line-join": "round",
 };
 
 const map = new maplibregl.Map({
   container: "map",
   style: {
     version: 8,
+    glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
     sources: {
       basemap: {
         type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        // Carto Positron — soft, low-contrast neutrals that let the network breathe.
+        tiles: ["https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"],
         tileSize: 256,
-        attribution: "© OpenStreetMap contributors",
+        attribution:
+          "© OpenStreetMap contributors · © CARTO · network data per popover provenance",
       },
       transmission_lines: {
         type: "vector",
@@ -57,42 +71,52 @@ const map = new maplibregl.Map({
     layers: [
       { id: "basemap", type: "raster", source: "basemap" },
       {
+        // Hyphae: transmission as the branching network of a living mat.
         id: "transmission_lines",
         type: "line",
         source: "transmission_lines",
         "source-layer": "transmission_lines",
-        paint: VOLTAGE_PAINT,
+        paint: HYPHAE_PAINT,
       },
       {
+        // Nodes where hyphae braid: substations as small spore points.
         id: "substations",
         type: "circle",
         source: "substations",
         "source-layer": "substations",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 1.5, 10, 4],
-          "circle-color": "#fff",
-          "circle-stroke-color": "#000",
-          "circle-stroke-width": 0.5,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 1.2, 10, 3.6],
+          "circle-color": PALETTE.bone,
+          "circle-stroke-color": PALETTE.loam900,
+          "circle-stroke-width": 0.6,
+          "circle-opacity": 0.9,
         },
       },
       {
+        // Fruiting bodies: generation plants, sized by capacity, colored by fuel family.
         id: "plants",
         type: "circle",
         source: "plants",
         "source-layer": "plants",
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "capacity_mw"], 0, 2, 2000, 12],
+          "circle-radius": [
+            "interpolate", ["linear"], ["coalesce", ["get", "capacity_mw"], 0],
+            0,    2,
+            500,  6,
+            2000, 11,
+            5000, 16,
+          ],
           "circle-color": [
             "match", ["get", "fuel"],
-            "solar", "#fbbf24",
-            "wind", "#22d3ee",
-            "natural_gas", "#f97316",
-            "coal", "#1f2937",
-            "nuclear", "#a78bfa",
-            "hydro", "#3b82f6",
-            "#9ca3af",
+            "solar",       PALETTE.fuelSolar,
+            "wind",        PALETTE.fuelWind,
+            "natural_gas", PALETTE.fuelGas,
+            "coal",        PALETTE.fuelCoal,
+            "nuclear",     PALETTE.fuelNuclear,
+            "hydro",       PALETTE.fuelHydro,
+            PALETTE.fuelOther,
           ],
-          "circle-stroke-color": "#000",
+          "circle-stroke-color": PALETTE.loam900,
           "circle-stroke-width": 0.5,
           "circle-opacity": 0.85,
         },
@@ -110,7 +134,7 @@ for (const layer of ["substations", "plants", "transmission_lines"]) {
     if (!f) return;
     const sources = (f.properties?.sources as string) ?? "(unknown)";
     const licenses = (f.properties?.licenses as string) ?? "(unknown)";
-    new maplibregl.Popup()
+    new maplibregl.Popup({ className: "myc-popup" })
       .setLngLat(e.lngLat)
       .setHTML(
         `<strong>${f.properties?.name ?? layer}</strong><br/>` +
@@ -123,6 +147,8 @@ for (const layer of ["substations", "plants", "transmission_lines"]) {
 }
 
 // TODO Phase 5+: deck.gl HeatmapLayer over gold_market.lmp_hourly via DuckDB-WASM.
-// TODO Phase 5+: ?episode=<id> query string -> fetch overlay GeoJSON, add red/green layers.
+// TODO Phase 5+: ?episode=<id> query string -> fetch overlay GeoJSON; use
+//                PALETTE.overload (red) and PALETTE.mitigation (green) — the
+//                only saturated colors on the map, so the eye finds them.
 
 export {};

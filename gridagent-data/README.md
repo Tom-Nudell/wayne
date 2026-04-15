@@ -9,8 +9,13 @@ public power-systems sources:
 
 Sources are treated as upstream layers, not the canonical schema. PUDL handles EIA/FERC/CEMS,
 PyPSA-USA contributes pre-balanced transmission topology, GridStatus provides real-time market
-data, OSM + HIFLD give visualization-grade geospatial features, NREL SMART-DS / EPRI cover
-synthetic distribution grids, and GEM is the path to global coverage.
+data, OSM + HIFLD give visualization-grade geospatial features, and NREL SMART-DS / EPRI
+cover synthetic distribution grids.
+
+**License posture:** every source is fully open (CC-BY-4.0, ODbL, BSD/MIT,
+US public domain). Mixed-license sources (e.g. Global Energy Monitor, whose
+trackers vary tier-by-tier) are deferred until we can confirm a fully open
+subset for the global build.
 
 ## Layout
 
@@ -26,7 +31,6 @@ src/gridagent_data/        # Python package
     hifld/
     nrel_smart_ds/
     epri/
-    gem/
   exporters/                # bundle exporters
     to_sienna.py            # MATPOWER + EIA sidecar
     to_pmtiles.py           # tippecanoe driver

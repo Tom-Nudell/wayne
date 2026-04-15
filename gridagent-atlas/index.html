@@ -6,21 +6,49 @@
     <title>gridagent atlas</title>
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.5.0/dist/maplibre-gl.css" />
     <style>
+      /* Mycelium / forest-floor palette — quiet earth tones, alarm colors
+         reserved for scenario overlays. See src/theme.ts for the canonical
+         constants; these CSS values mirror them for the chrome only. */
+      :root {
+        --loam-900: #1c1812;
+        --loam-700: #3b3228;
+        --loam-500: #6b5d4a;
+        --bone:     #f3ede0;
+        --paper:    #faf6ec;
+      }
       html, body, #map { margin: 0; padding: 0; height: 100%; }
-      body { font-family: system-ui, sans-serif; }
+      body {
+        font-family: ui-serif, "Iowan Old Style", Georgia, serif;
+        color: var(--loam-900);
+        background: var(--paper);
+      }
       #panel {
-        position: absolute; top: 12px; left: 12px; z-index: 10;
-        background: rgba(20, 22, 30, 0.85); color: #fff;
-        padding: 10px 14px; border-radius: 6px; max-width: 280px;
-        font-size: 13px; line-height: 1.4;
+        position: absolute; top: 14px; left: 14px; z-index: 10;
+        background: rgba(243, 237, 224, 0.92);
+        color: var(--loam-900);
+        padding: 12px 16px;
+        border: 1px solid var(--loam-500);
+        border-radius: 2px;          /* understated — closer to a botanical label */
+        max-width: 300px;
+        font-size: 13px; line-height: 1.5;
+        box-shadow: 0 1px 0 rgba(28, 24, 18, 0.06);
+      }
+      #panel strong { font-weight: 600; letter-spacing: 0.04em; text-transform: lowercase; }
+      .myc-popup .maplibregl-popup-content {
+        background: var(--bone);
+        color: var(--loam-900);
+        border: 1px solid var(--loam-500);
+        border-radius: 2px;
+        font-family: ui-serif, Georgia, serif;
       }
     </style>
   </head>
   <body>
     <div id="map"></div>
     <div id="panel">
-      <strong>gridagent atlas</strong><br />
-      Layers load from <code>VITE_TILE_BASE</code> · queries via DuckDB-WASM
+      <strong>gridagent · atlas</strong><br />
+      <em>a living network</em><br />
+      Layers stream from <code>VITE_TILE_BASE</code>; queries run in-browser via DuckDB-WASM.
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

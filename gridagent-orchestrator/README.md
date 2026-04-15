@@ -50,9 +50,30 @@ Every successful episode writes a candidate to
 `trajectory_store/_pending/`. Manual review promotes good ones into the active
 store — this is how the corpus grows without expert-only authoring.
 
+## LLM provider — local-first
+
+Default planner is a local OpenAI-compatible server (Ollama at
+`http://localhost:11434/v1`) running an open-weight model from the **Gemma**
+family. No hosted API key required.
+
+Override via env vars or flags:
+
+| Env var                    | Default                          |
+|----------------------------|----------------------------------|
+| `GRIDAGENT_LLM_BASE_URL`   | `http://localhost:11434/v1`      |
+| `GRIDAGENT_LLM_MODEL`      | `gemma3:27b`                     |
+| `GRIDAGENT_LLM_API_KEY`    | `ollama` (ignored by Ollama)     |
+
+Same code path works against vLLM, llama.cpp `server`, or any other
+OpenAI-compatible endpoint. Hosted providers (Anthropic, OpenAI) can be added
+as alternative `LLM` Protocol implementations once we want a head-to-head
+benchmark — they are not the default.
+
 ## Run
 
 ```bash
+ollama pull gemma3:27b   # one-time, ~17 GB
+
 uv run gridagent-orchestrator \
   --goal "Add 2 GW of solar at the largest substation in ERCOT and run an N-1 study."
 ```

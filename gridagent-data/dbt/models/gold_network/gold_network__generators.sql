@@ -2,9 +2,9 @@
 --
 -- Sienna-bound. Each row is a generator unit annotated with the source layer
 -- that contributed it. For now we have a single source (PUDL EIA-860); more
--- sources (PyPSA-USA aggregated buses, GEM global units, OSM-derived foreign
--- units) will be unioned in here with deterministic conflict-resolution rules
--- documented per source.
+-- sources (PyPSA-USA aggregated buses, OSM-derived units) will be unioned in
+-- here with deterministic conflict-resolution rules documented per source.
+-- Global units are deferred until a fully-open global source is identified.
 
 with pudl_units as (
     select

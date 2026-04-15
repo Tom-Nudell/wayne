@@ -19,7 +19,8 @@ The Sienna export reads from these tables.
 
 - **Generators**: PUDL EIA-860 is the master for US units. PyPSA-USA aggregations
   are kept as a separate column for downstream consumers that prefer the bus-level
-  rollup. GEM is authoritative for non-US units once we have global coverage.
+  rollup. Non-US authority is deferred until we identify a fully-open global source
+  (Global Energy Monitor's commercial-tier trackers are out of scope for v1).
 - **Branches**: HIFLD geometry; OSM `voltage` tag refines voltage class when HIFLD
   reports a wider range. Conflicts logged as dbt test warnings, not failures.
 

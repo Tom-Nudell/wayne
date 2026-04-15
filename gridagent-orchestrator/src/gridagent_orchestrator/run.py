@@ -13,7 +13,7 @@ from gridagent_tools import TOOL_REGISTRY, ToolResult
 
 from .context import assemble
 from .episode import Episode, EpisodeStep
-from .planner import AnthropicLLM, LLM, ToolCall, tools_for_llm
+from .planner import LLM, LocalOpenAILLM, ToolCall, tools_for_llm
 from .retrieval import retrieve
 from .verifier import Decision, Verifier
 
@@ -89,10 +89,19 @@ def run_episode(goal: str, llm: LLM, verifier: Verifier | None = None) -> Episod
 def main() -> None:
     parser = argparse.ArgumentParser(prog="gridagent-orchestrator")
     parser.add_argument("--goal", required=True)
-    parser.add_argument("--model", default="claude-sonnet-4-6")
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Model name for the local LLM (default: $GRIDAGENT_LLM_MODEL or 'gemma3:27b').",
+    )
+    parser.add_argument(
+        "--base-url",
+        default=None,
+        help="OpenAI-compatible base URL (default: $GRIDAGENT_LLM_BASE_URL or http://localhost:11434/v1).",
+    )
     args = parser.parse_args()
 
-    llm = AnthropicLLM(model=args.model)
+    llm = LocalOpenAILLM(model=args.model, base_url=args.base_url)
     episode = run_episode(args.goal, llm=llm)
     print(f"Episode {episode.episode_id} written to {episode.log_path}")
 
