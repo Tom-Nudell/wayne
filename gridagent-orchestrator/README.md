@@ -53,26 +53,28 @@ store — this is how the corpus grows without expert-only authoring.
 ## LLM provider — local-first
 
 Default planner is a local OpenAI-compatible server (Ollama at
-`http://localhost:11434/v1`) running an open-weight model from the **Gemma**
-family. No hosted API key required.
+`http://localhost:11434/v1`) running **Gemma 4 E12B** — Apache-2.0,
+native tool-calling, native system role, released 2026-04-02. No hosted
+API key required. Drop to `gemma4:e4b` on a laptop, or step up to
+`gemma4:e27b` / `gemma4:26b-moe` on a workstation.
 
 Override via env vars or flags:
 
 | Env var                    | Default                          |
 |----------------------------|----------------------------------|
 | `GRIDAGENT_LLM_BASE_URL`   | `http://localhost:11434/v1`      |
-| `GRIDAGENT_LLM_MODEL`      | `gemma3:27b`                     |
+| `GRIDAGENT_LLM_MODEL`      | `gemma4:e12b`                    |
 | `GRIDAGENT_LLM_API_KEY`    | `ollama` (ignored by Ollama)     |
 
 Same code path works against vLLM, llama.cpp `server`, or any other
-OpenAI-compatible endpoint. Hosted providers (Anthropic, OpenAI) can be added
-as alternative `LLM` Protocol implementations once we want a head-to-head
-benchmark — they are not the default.
+OpenAI-compatible endpoint. Hosted providers (Anthropic, OpenAI) can
+be wired in via pydantic-ai's standard model constructors once we want
+a head-to-head benchmark — they are not the default.
 
 ## Run
 
 ```bash
-ollama pull gemma3:27b   # one-time, ~17 GB
+ollama pull gemma4:e12b   # one-time, ~8 GB
 
 uv run gridagent-orchestrator \
   --goal "Add 2 GW of solar at the largest substation in ERCOT and run an N-1 study."

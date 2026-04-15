@@ -12,9 +12,11 @@ Each tool exposed to the model is a thin typed wrapper around the corresponding
   6. on ABORT raises ``RuntimeError`` to end the run.
 
 Local-first: defaults to an OpenAI-compatible endpoint served by Ollama
-(``http://localhost:11434/v1``) running an open-weight model (Gemma family).
-Override ``GRIDAGENT_LLM_BASE_URL`` / ``GRIDAGENT_LLM_MODEL`` to point at
-vLLM, llama.cpp's ``server`` binary, or a hosted provider.
+(``http://localhost:11434/v1``) running an open-weight model. Default is
+Gemma 4 E12B — Apache-2.0, native tool-calling, native system role,
+released 2026-04-02 — which is the current sweet spot for desktop agent
+work. Override ``GRIDAGENT_LLM_BASE_URL`` / ``GRIDAGENT_LLM_MODEL`` to
+point at vLLM, llama.cpp's ``server`` binary, or a hosted provider.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ from .verifier import Decision, Verifier
 
 
 _DEFAULT_BASE_URL = "http://localhost:11434/v1"
-_DEFAULT_MODEL = "gemma3:27b"
+_DEFAULT_MODEL = "gemma4:e12b"
 
 
 _INSTRUCTIONS = """\

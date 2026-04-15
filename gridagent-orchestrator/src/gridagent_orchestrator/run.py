@@ -65,7 +65,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name (default: $GRIDAGENT_LLM_MODEL or 'gemma3:27b').",
+        help="Model name (default: $GRIDAGENT_LLM_MODEL or 'gemma4:e12b').",
     )
     parser.add_argument(
         "--base-url",
