@@ -1,6 +1,8 @@
-"""Episode driver: plan -> tool call -> verify -> repeat.
+"""Episode driver: hand the goal to a pydantic-ai Agent and stream the run.
 
-CLI entrypoint. Stays small; everything interesting lives in planner / verifier.
+The agent loops internally — picking tools, receiving results, and replanning
+when the verifier raises ModelRetry. We just kick it off and persist the
+final summary.
 """
 
 from __future__ import annotations
@@ -9,80 +11,51 @@ import argparse
 import os
 from pathlib import Path
 
-from gridagent_tools import TOOL_REGISTRY, ToolResult
-
-from .context import assemble
-from .episode import Episode, EpisodeStep
-from .planner import LLM, LocalOpenAILLM, ToolCall, tools_for_llm
+from .episode import Episode
+from .planner import OrchestratorDeps, make_agent
 from .retrieval import retrieve
-from .verifier import Decision, Verifier
+from .verifier import Verifier
 
-MAX_STEPS = 25
+
+def _user_prompt(goal: str) -> str:
+    """Goal + a few retrieved exemplar trajectories.
+
+    The trajectory store seeds the model with hand-vetted reasoning paths
+    (PowerChain-style). Empty store is fine; the model still has the
+    instructions baked into the agent.
+    """
+    trajectories = retrieve(goal, k=3)
+    if not trajectories:
+        return goal
+    body = "\n\n---\n\n".join(t.text for t in trajectories)
+    return (
+        f"# Goal\n{goal}\n\n"
+        f"# Reference trajectories (vetted exemplars; adapt, do not copy)\n{body}"
+    )
 
 
 def _episode_root() -> Path:
     return Path(os.environ.get("GRIDAGENT_EPISODE_ROOT", "episodes"))
 
 
-def run_episode(goal: str, llm: LLM, verifier: Verifier | None = None) -> Episode:
-    verifier = verifier or Verifier.default()
+def run_episode(
+    goal: str,
+    *,
+    model: str | None = None,
+    base_url: str | None = None,
+    verifier: Verifier | None = None,
+) -> Episode:
+    """Drive a single episode end-to-end and return the persisted log."""
     episode = Episode.new(goal=goal, root=_episode_root())
+    deps = OrchestratorDeps(verifier=verifier or Verifier.default(), episode=episode)
+    agent = make_agent(model=model, base_url=base_url)
 
-    last_value = None
-    last_signal: dict | None = None
-    scenario_state: dict | None = None
-    attempts: dict[str, int] = {}
-
-    for step_num in range(1, MAX_STEPS + 1):
-        ctx = assemble(
-            trajectories=retrieve(goal),
-            scenario_state=scenario_state,
-            last_value=last_value,
-            last_signal=last_signal,
-        )
-        prompt = f"Goal: {goal}\n\n{ctx.render()}"
-
-        call: ToolCall | None = llm.propose(prompt, tools_for_llm())
-        if call is None:
-            episode.finish(summary="Planner returned no tool call; episode ended.")
-            return episode
-
-        spec = TOOL_REGISTRY.get(call.name)
-        if spec is None:
-            episode.finish(summary=f"Planner requested unknown tool {call.name!r}; abort.")
-            return episode
-
-        attempt = attempts.get(call.name, 0) + 1
-        attempts[call.name] = attempt
-        result: ToolResult = spec.fn(**call.arguments)
-        decision = verifier.decide(call.name, result.signal, attempt=attempt)
-
-        episode.append_step(
-            EpisodeStep(
-                step=step_num,
-                tool=call.name,
-                arguments=call.arguments,
-                value=result.value,
-                signal=result.signal,
-                decision=decision,
-                attempt=attempt,
-            )
-        )
-
-        last_value = result.value
-        last_signal = result.signal
-        if call.name == "create_scenario":
-            scenario_state = result.value if isinstance(result.value, dict) else None
-
-        if decision is Decision.ABORT:
-            episode.finish(summary=f"Verifier aborted after {call.name}.")
-            return episode
-        if decision is Decision.ADVANCE:
-            attempts[call.name] = 0  # reset retry counter on success
-            continue
-        # RETRY / REPLAN: loop again; planner sees the failed signal in context.
-
-    episode.finish(summary=f"Reached MAX_STEPS={MAX_STEPS} without completion.")
+    try:
+        result = agent.run_sync(_user_prompt(goal), deps=deps)
+        episode.finish(summary=str(result.output))
+    except RuntimeError as exc:
+        # Verifier ABORT or unrecoverable model retry exhaustion.
+        episode.finish(summary=f"Aborted: {exc}")
     return episode
 
 
@@ -92,7 +65,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         default=None,
-        help="Model name for the local LLM (default: $GRIDAGENT_LLM_MODEL or 'gemma3:27b').",
+        help="Model name (default: $GRIDAGENT_LLM_MODEL or 'gemma3:27b').",
     )
     parser.add_argument(
         "--base-url",
@@ -101,8 +74,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    llm = LocalOpenAILLM(model=args.model, base_url=args.base_url)
-    episode = run_episode(args.goal, llm=llm)
+    episode = run_episode(args.goal, model=args.model, base_url=args.base_url)
     print(f"Episode {episode.episode_id} written to {episode.log_path}")
 
 

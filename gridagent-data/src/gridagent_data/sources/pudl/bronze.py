@@ -15,6 +15,7 @@ table:
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -33,6 +34,14 @@ TABLES: tuple[PudlTable, ...] = (
     PudlTable(
         name="core_eia860__scd_generators",
         description="EIA Form 860 generator-level annual snapshot (slowly changing).",
+    ),
+    PudlTable(
+        name="core_eia860__scd_plants",
+        description="EIA Form 860 plant-level annual snapshot with lat/lon and BA.",
+    ),
+    PudlTable(
+        name="core_eia923__monthly_generation",
+        description="EIA Form 923 monthly net generation by generator.",
     ),
 )
 
@@ -56,14 +65,35 @@ def fetch_table(table: PudlTable, *, client: httpx.Client | None = None) -> dict
     own_client = client is None
     client = client or httpx.Client(timeout=httpx.Timeout(60.0, read=600.0), follow_redirects=True)
 
+    # PUDL S3 is intermittently rate-limited; retry with exponential backoff on 5xx/429.
+    delays = (0, 2, 5, 10, 20, 30)
+    last_error: Exception | None = None
+    etag = ""
+    content_length = 0
     try:
-        with client.stream("GET", url) as response:
-            response.raise_for_status()
-            with parquet_path.open("wb") as fh:
-                for chunk in response.iter_bytes(chunk_size=1 << 20):
-                    fh.write(chunk)
-            etag = response.headers.get("etag", "")
-            content_length = int(response.headers.get("content-length", "0") or 0)
+        for delay in delays:
+            if delay:
+                time.sleep(delay)
+            try:
+                with client.stream("GET", url) as response:
+                    if response.status_code in (429, 500, 502, 503, 504):
+                        response.read()
+                        last_error = httpx.HTTPStatusError(
+                            f"HTTP {response.status_code}", request=response.request, response=response
+                        )
+                        continue
+                    response.raise_for_status()
+                    with parquet_path.open("wb") as fh:
+                        for chunk in response.iter_bytes(chunk_size=1 << 20):
+                            fh.write(chunk)
+                    etag = response.headers.get("etag", "")
+                    content_length = int(response.headers.get("content-length", "0") or 0)
+                    last_error = None
+                    break
+            except httpx.RequestError as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
     finally:
         if own_client:
             client.close()

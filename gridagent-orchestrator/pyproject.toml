@@ -5,10 +5,13 @@ description = "PowerChain-style verifiable agent loop over the gridagent tool su
 requires-python = ">=3.11"
 dependencies = [
     "gridagent-tools",
-    # Local-first: openai SDK speaks the OpenAI-compatible API that Ollama,
-    # vLLM, and llama.cpp all expose. Default endpoint is a local Ollama
-    # instance running an open model (Gemma family). No hosted LLM required.
-    "openai>=1.40",
+    # pydantic-ai is the agent framework: typed tools, model-agnostic, with
+    # ModelRetry as the natural seam for our verifier (RETRY/REPLAN raise
+    # ModelRetry; the model gets the supervisory signal back as an error
+    # message and re-plans). The [openai] extra brings the OpenAI Python SDK,
+    # which speaks the OpenAI-compatible API that Ollama, vLLM, and llama.cpp
+    # all expose — local-first by default.
+    "pydantic-ai-slim[openai]>=0.0.40",
     "pydantic>=2.8",
     "pyyaml>=6.0",
     "rich>=13",

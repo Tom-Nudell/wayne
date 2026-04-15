@@ -1,0 +1,14 @@
+{
+  "base_mva": 100.0,
+  "built_at": "2026-04-15T19:05:56.214338+00:00",
+  "counts": {
+    "branches": 120,
+    "buses": 73,
+    "generators": 158,
+    "loads": 51
+  },
+  "label": "rts_gmlc",
+  "sources": [
+    "rts_gmlc"
+  ]
+}

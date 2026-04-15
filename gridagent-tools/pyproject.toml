@@ -6,11 +6,18 @@ requires-python = ">=3.11"
 dependencies = [
     "duckdb>=1.1",
     "pandas>=2.2",
+    "pyarrow>=17",
     "pydantic>=2.8",
     "anyio>=4.4",
+    "numpy>=1.26",
+    "scipy>=1.13",
 ]
 
 [project.optional-dependencies]
+# Backends are optional installs so the core tool surface stays light.
+# pandapower is the in-process Python backend (BSD-3); sienna is a subprocess
+# / container shim (no Python deps to install — Julia lives outside).
+pandapower = ["pandapower>=2.14"]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [build-system]
