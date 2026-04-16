@@ -1,4 +1,4 @@
-# gridagent
+# Wayne
 
 Autonomous interconnection-study and market-simulation platform built on
 NREL Sienna and a PowerChain-style verifiable agent loop.
@@ -6,6 +6,10 @@ NREL Sienna and a PowerChain-style verifiable agent loop.
 End-to-end execution works today against the RTS-GMLC test system via a
 pandapower backend stopgap; NREL Sienna (Julia) is the target production
 engine. See each subdirectory's README for details.
+
+> Internal Python packages keep the `gridagent-*` / `gridagent_*` prefix —
+> that's the working module name the code and imports have standardised
+> on. "Wayne" is the product/repo name; `gridagent` is the namespace.
 
 ## Packages
 
@@ -71,7 +75,7 @@ Confirmed decisions for the first pass:
 
 ## Aesthetic — a living network
 
-Brand and domain are TBD; codename remains `gridagent`. The visual
+Product name is **Wayne**; Python namespace is `gridagent`. The visual
 language for the atlas (and any chrome that follows) is **mycelium / forest
 floor** — the grid as a branching, breathing network, rendered in calm earth
 tones. Alarm colors are reserved for scenario overlays so they read against
