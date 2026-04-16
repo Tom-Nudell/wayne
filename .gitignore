@@ -7,6 +7,10 @@ data_root/silver/
 data_root/gold/
 data_root/episodes/
 data_root/scenarios/
+data_root/*.duckdb
+
+# Node
+node_modules/
 
 # Per-package virtualenvs
 */.venv/

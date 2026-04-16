@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            gridagent-tools/.venv
+            gridagent-orchestrator/.venv
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install gridagent-tools (with pandapower extra)
+        run: |
+          uv venv --python 3.11 gridagent-tools/.venv
+          uv pip install --python gridagent-tools/.venv/bin/python -e gridagent-tools --extra pandapower
+
+      - name: Tools smoke test (list → query → create → N-1)
+        run: gridagent-tools/.venv/bin/python _smoke_test.py
+
+      - name: Install gridagent-orchestrator (with pydantic-ai)
+        run: |
+          uv venv --python 3.11 gridagent-orchestrator/.venv
+          uv pip install --python gridagent-orchestrator/.venv/bin/python \
+            -e gridagent-orchestrator \
+            -e gridagent-tools \
+            pandapower
+
+      - name: Orchestrator smoke test (pydantic-ai FunctionModel)
+        run: gridagent-orchestrator/.venv/bin/python _orchestrator_smoke.py
+
+  data-tests:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gridagent-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            gridagent-data/.venv
+          key: uv-data-${{ runner.os }}-${{ hashFiles('gridagent-data/pyproject.toml') }}
+
+      - name: Install gridagent-data (with dev)
+        run: |
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv/bin/python -e '.[dev]'
+
+      - name: Pytest
+        run: .venv/bin/pytest tests/ -v
+
+  lint:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Ruff check
+        run: |
+          uv tool install ruff
+          uvx ruff check \
+            gridagent-tools/src \
+            gridagent-orchestrator/src \
+            gridagent-data/src \
+            gridagent-data/tests

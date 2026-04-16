@@ -3,11 +3,9 @@
 Autonomous interconnection-study and market-simulation platform built on
 NREL Sienna and a PowerChain-style verifiable agent loop.
 
-> This tree is the in-progress scaffold for the plan at
-> `/root/.claude/plans/gentle-exploring-starfish.md`. All packages are
-> wired-up skeletons — schemas, registries, and seams are in place;
-> end-to-end execution is not yet hooked up. See each subdirectory's
-> README for what's stubbed.
+End-to-end execution works today against the RTS-GMLC test system via a
+pandapower backend stopgap; NREL Sienna (Julia) is the target production
+engine. See each subdirectory's README for details.
 
 ## Packages
 
@@ -81,10 +79,9 @@ a quiet base. Working notes in `gridagent-atlas/BRANDING.md`.
 
 ## Reference
 
-- Plan: `/root/.claude/plans/gentle-exploring-starfish.md`
 - PowerChain (verifier + dynamic context): arXiv 2508.17094
 - NREL Sienna: https://nrel-sienna.github.io/PowerSystems.jl/
-- PowerSimData (read-only inspiration): `../powersimdata/`
+- PowerSimData (design inspiration for change-table DSL): https://github.com/Breakthrough-Energy/PowerSimData
 
 ## Desktop bring-up
 
@@ -106,7 +103,7 @@ agent** path depending on what you want to exercise.
 ### Data + dbt + atlas
 
 ```bash
-cd gridagent/gridagent-data
+cd gridagent-data
 uv sync && source .venv/bin/activate
 
 # Bronze: pull RTS-GMLC (fast, ~100 KB) and PUDL (slower, ~500 MB).
@@ -129,7 +126,6 @@ cd ../gridagent-atlas && npm install && npm run dev
 Offline (no LLM, scripted plan — the CI path):
 
 ```bash
-cd gridagent
 python _orchestrator_smoke.py
 # → Episode <id> OK; 4 tool calls executed.
 ```
@@ -139,11 +135,10 @@ Live (local LLM via Ollama, default model `gemma4:e12b`):
 ```bash
 # Start the LLM server in one terminal:
 ollama serve &
-ollama pull gemma3:12b  # or any tool-calling model; override with
-                        # GRIDAGENT_LLM_MODEL / GRIDAGENT_LLM_BASE_URL
+ollama pull gemma4:e12b  # or any tool-calling model; override with
+                         # GRIDAGENT_LLM_MODEL / GRIDAGENT_LLM_BASE_URL
 
 # In another terminal:
-cd gridagent
 python -m gridagent_orchestrator.run \
     --goal "Load the RTS-GMLC snapshot, create a baseline scenario, and
             run an N-1 contingency screen. Summarise the worst overload."
