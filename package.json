@@ -1,0 +1,21 @@
+{
+  "name": "wayne-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Wayne — agent platform + commercial energy infrastructure map",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "pnpm --filter ./web dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r --if-present check",
+    "lint": "pnpm -r --if-present lint",
+    "test": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
