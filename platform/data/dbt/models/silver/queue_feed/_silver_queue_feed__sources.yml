@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: bronze_queue_feed
+    description: Daily remote queue CSV feed (provider configured via env URL).
+    meta:
+      external_location: "{{ env_var('GRIDAGENT_DATA_ROOT', '../data_root') }}/bronze/queue_feed"
+    tables:
+      - name: latest
+        description: Latest queue snapshot CSV.

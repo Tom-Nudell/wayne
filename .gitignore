@@ -11,6 +11,11 @@ data_root/*.duckdb
 
 # Node
 node_modules/
+.svelte-kit/
+.vercel/
+dist/
+build/
+.wrangler/
 
 # Per-package virtualenvs
 */.venv/

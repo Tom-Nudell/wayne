@@ -1,0 +1,11 @@
+name = "wayne-tile-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+# Bindings — fill in when Phase 0 cloud foundations are stood up.
+# [[r2_buckets]]
+# binding = "TILES"
+# bucket_name = "wayne-tiles"
+#
+# [vars]
+# JWT_PUBLIC_KEY = "set via `wrangler secret put`"

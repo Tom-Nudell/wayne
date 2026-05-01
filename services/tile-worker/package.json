@@ -1,0 +1,20 @@
+{
+  "name": "@wayne/tile-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cloudflare Worker that gates paid-tier PMTiles via short-TTL JWTs.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wayne/api": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241112.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^3.86.0"
+  }
+}

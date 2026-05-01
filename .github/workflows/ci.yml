@@ -26,35 +26,35 @@ jobs:
         with:
           path: |
             ~/.cache/uv
-            gridagent-tools/.venv
-            gridagent-orchestrator/.venv
+            platform/tools/.venv
+            platform/orchestrator/.venv
           key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: Install gridagent-tools (with pandapower extra)
         run: |
-          uv venv --python 3.11 gridagent-tools/.venv
-          uv pip install --python gridagent-tools/.venv/bin/python -e gridagent-tools --extra pandapower
+          uv venv --python 3.11 platform/tools/.venv
+          uv pip install --python platform/tools/.venv/bin/python -e platform/tools --extra pandapower
 
       - name: Tools smoke test (list → query → create → N-1)
-        run: gridagent-tools/.venv/bin/python _smoke_test.py
+        run: platform/tools/.venv/bin/python _smoke_test.py
 
       - name: Install gridagent-orchestrator (with pydantic-ai)
         run: |
-          uv venv --python 3.11 gridagent-orchestrator/.venv
-          uv pip install --python gridagent-orchestrator/.venv/bin/python \
-            -e gridagent-orchestrator \
-            -e gridagent-tools \
+          uv venv --python 3.11 platform/orchestrator/.venv
+          uv pip install --python platform/orchestrator/.venv/bin/python \
+            -e platform/orchestrator \
+            -e platform/tools \
             pandapower
 
       - name: Orchestrator smoke test (pydantic-ai FunctionModel)
-        run: gridagent-orchestrator/.venv/bin/python _orchestrator_smoke.py
+        run: platform/orchestrator/.venv/bin/python _orchestrator_smoke.py
 
   data-tests:
     if: "!contains(github.event.head_commit.message, 'skip_ci')"
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: gridagent-data
+        working-directory: platform/data
     steps:
       - uses: actions/checkout@v4
 
@@ -71,8 +71,8 @@ jobs:
         with:
           path: |
             ~/.cache/uv
-            gridagent-data/.venv
-          key: uv-data-${{ runner.os }}-${{ hashFiles('gridagent-data/pyproject.toml') }}
+            platform/data/.venv
+          key: uv-data-${{ runner.os }}-${{ hashFiles('platform/data/pyproject.toml') }}
 
       - name: Install gridagent-data (with dev)
         run: |
@@ -97,7 +97,59 @@ jobs:
         run: |
           uv tool install ruff
           uvx ruff check \
-            gridagent-tools/src \
-            gridagent-orchestrator/src \
-            gridagent-data/src \
-            gridagent-data/tests
+            platform/tools/src \
+            platform/orchestrator/src \
+            platform/data/src \
+            platform/data/tests
+
+  schema-drift:
+    # Source of truth: platform/data/.../schema/models.py
+    # Target:          shared/schema/src/index.ts
+    # If they disagree, the generator exits 2 with the regen command.
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install pydantic
+        run: uv pip install --system pydantic
+
+      - name: Schema drift check
+        run: |
+          PYTHONPATH=platform/data/src python -m gridagent_data.schema.generate_ts \
+            --out shared/schema/src/index.ts --check
+
+  web:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.33.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Web typecheck
+        run: pnpm --filter @wayne/web check
+
+      - name: Tile-worker typecheck
+        run: pnpm --filter @wayne/tile-worker check
+
+      - name: Web build
+        run: pnpm --filter @wayne/web build

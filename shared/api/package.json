@@ -1,0 +1,18 @@
+{
+  "name": "@wayne/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed clients for /api/* endpoints. Single source for request/response shapes.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@wayne/schema": "workspace:*"
+  }
+}

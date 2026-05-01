@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.vite/
+public/tiles/
+public/data/
+public/bundle.duckdb
+public/overlays/*.geojson
+*.log
