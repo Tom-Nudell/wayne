@@ -229,7 +229,7 @@ def cmd_dbt(subcommand: str, extra: list[str]) -> int:
     We keep dbt as a subprocess rather than importing ``dbt-core``: the dbt
     Python API is deliberately unstable and mixing it into our package
     surface would force every caller to inherit its transitive deps. The
-    project lives at ``gridagent-data/dbt/`` and carries its own profile.
+    project lives at ``platform/data/dbt/`` and carries its own profile.
     """
     project_dir = Path(__file__).resolve().parents[2] / "dbt"
     env = os.environ.copy()
@@ -349,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     bun.add_argument(
         "--atlas-public",
         default=None,
-        help="Optional path to gridagent-atlas/public/ to mirror artifacts.",
+        help="Optional path to platform/atlas/public/ to mirror artifacts.",
     )
 
     sub.add_parser("list", help="List snapshot bundles.")
@@ -401,7 +401,7 @@ def main(argv: list[str] | None = None) -> int:
     ref.add_argument(
         "--atlas-public",
         default=None,
-        help="Optional path to gridagent-atlas/public/ to mirror artifacts.",
+        help="Optional path to platform/atlas/public/ to mirror artifacts.",
     )
 
     args = parser.parse_args(argv)

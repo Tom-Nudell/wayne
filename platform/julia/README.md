@@ -27,7 +27,7 @@ Execution-backend choice does not propagate up to the agent.
 Python shells out via:
 
 ```bash
-julia --project gridagent-julia/run.jl <study> <scenario.json>
+julia --project platform/julia/run.jl <study> <scenario.json>
 ```
 
 `scenario.json` carries the change table and the path to the Sienna bundle

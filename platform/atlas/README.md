@@ -1,13 +1,16 @@
 # gridagent-atlas
 
 MapLibre + PMTiles + DuckDB-WASM browse surface over the canonical
-`gold_atlas` and `gold_market` schemas. **First-class deliverable** — the
-human-facing way to extract value from the platform.
+`gold_atlas` and `gold_market` schemas.
+
+> Internal viewer for the agent loop (renders orchestrator overlays). The
+> customer-facing commercial map lives in `web/` — see the engineering brief
+> at the repo root.
 
 ## Architecture
 
 ```
-gridagent-data exporters/         gridagent-atlas (this repo)
+platform/data exporters/          platform/atlas (this package)
    to_pmtiles.py  ───────►  /tiles/*.pmtiles      (PMTiles via HTTP range)
    to_duckdb.py   ───────►  /data/bundle.duckdb   (DuckDB-WASM in-browser)
                             /                     (Vite static site)

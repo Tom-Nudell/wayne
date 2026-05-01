@@ -26,7 +26,7 @@ Configure in Claude Desktop's `claude_desktop_config.json`:
   "mcpServers": {
     "gridagent": {
       "command": "uv",
-      "args": ["run", "--directory", "/abs/path/to/gridagent/gridagent-mcp", "gridagent-mcp"]
+      "args": ["run", "--directory", "/abs/path/to/wayne/platform/mcp", "gridagent-mcp"]
     }
   }
 }

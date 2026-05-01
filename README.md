@@ -11,28 +11,43 @@ engine. See each subdirectory's README for details.
 > that's the working module name the code and imports have standardised
 > on. "Wayne" is the product/repo name; `gridagent` is the namespace.
 
-## Packages
+## Layout
+
+The repo follows the layout in [`docs/MONOREPO.md`](docs/MONOREPO.md):
+
+```
+wayne/
+├── platform/        Wayne data + solver + agent stack (this is what's documented below)
+├── docs/            engineering docs (MONOREPO.md, ARCHITECTURE.md, ...)
+└── grid-map-engineering-brief.md   commercial map product spec (web/, services/, infra/ to come)
+```
+
+This README documents `platform/`. The commercial map product (`web/`, `shared/`, `services/`, `infra/`) is described in the engineering brief at the repo root and will land in subsequent phases.
+
+## Packages (under `platform/`)
 
 | Package | Lang | Phase | Role |
 |---|---|---|---|
-| `gridagent-data/` | Python (Dagster + dbt + DuckDB) | 1 | ETL: `bronze → silver → gold_{network,atlas,market}` from PUDL, PyPSA-USA, GridStatus, LBNL Queued Up, OSM, HIFLD, NREL SMART-DS, EPRI. (All fully-open licenses.) |
-| `gridagent-julia/` | Julia 1.10 (PowerSystems.jl) | 2–3 | NREL Sienna stack: power flow, N-1 LODF screening, UC+ED PCM. `Executor` abstraction (`local_cpu` / `madnlp_gpu` / `distributed`) hides hardware from the agent. |
-| `gridagent-tools/` | Python | 4 | Typed tool surface (data / scenario / study). Single registry; same callable used in-process and over MCP. |
-| `gridagent-mcp/` | Python | 4 | Thin MCP server re-exporting `gridagent-tools` for external clients (Claude Desktop, Cursor). MCP is a transport, not the framework. |
-| `gridagent-orchestrator/` | Python (OpenAI SDK → local Ollama) | 4.5–4.6 | PowerChain-style agent loop: trajectory store → context assembler → planner LLM → tool call → rule-based verifier → durable episode log. Default model: open-weight Gemma family. |
-| `gridagent-atlas/` | TypeScript (MapLibre + PMTiles + DuckDB-WASM) | 5 | Static web atlas over `gold_atlas` and `gold_market`. Scenario overlays from orchestrator episodes. |
+| `platform/data/` | Python (Dagster + dbt + DuckDB) | 1 | ETL: `bronze → silver → gold_{network,atlas,market}` from PUDL, PyPSA-USA, GridStatus, LBNL Queued Up, OSM, HIFLD, NREL SMART-DS, EPRI. (All fully-open licenses.) |
+| `platform/julia/` | Julia 1.10 (PowerSystems.jl) | 2–3 | NREL Sienna stack: power flow, N-1 LODF screening, UC+ED PCM. `Executor` abstraction (`local_cpu` / `madnlp_gpu` / `distributed`) hides hardware from the agent. |
+| `platform/tools/` | Python | 4 | Typed tool surface (data / scenario / study). Single registry; same callable used in-process and over MCP. |
+| `platform/mcp/` | Python | 4 | Thin MCP server re-exporting `gridagent-tools` for external clients (Claude Desktop, Cursor). MCP is a transport, not the framework. |
+| `platform/orchestrator/` | Python (OpenAI SDK → local Ollama) | 4.5–4.6 | PowerChain-style agent loop: trajectory store → context assembler → planner LLM → tool call → rule-based verifier → durable episode log. Default model: open-weight Gemma family. |
+| `platform/atlas/` | TypeScript (MapLibre + PMTiles + DuckDB-WASM) | 5 | Internal map viewer over `gold_atlas` and `gold_market`. Renders orchestrator-produced overlays. Not the customer-facing surface — that's `web/` (engineering brief). |
+
+Python module names retain the `gridagent_` prefix (e.g. `gridagent_data`, `gridagent_orchestrator`); the `platform/` parent supplies the namespace at the directory layer.
 
 ## How the pieces talk
 
 ```
-gold_network ──► to_sienna.py ──► gridagent-julia (run.jl)
+gold_network ──► to_sienna.py ──► platform/julia (run.jl)
                                     ▲
-gold_atlas   ──► to_pmtiles.py ──► gridagent-atlas
+gold_atlas   ──► to_pmtiles.py ──► platform/atlas + web/  (commercial)
 gold_market  ──► to_duckdb.py  ──► (atlas + tools)
                                     ▲
-                            gridagent-tools  ◄─── gridagent-orchestrator
+                          platform/tools  ◄─── platform/orchestrator
                                     ▲
-                            gridagent-mcp (transport)
+                          platform/mcp (transport)
 ```
 
 Two invariants worth defending:
@@ -79,7 +94,7 @@ Product name is **Wayne**; Python namespace is `gridagent`. The visual
 language for the atlas (and any chrome that follows) is **mycelium / forest
 floor** — the grid as a branching, breathing network, rendered in calm earth
 tones. Alarm colors are reserved for scenario overlays so they read against
-a quiet base. Working notes in `gridagent-atlas/BRANDING.md`.
+a quiet base. Working notes in `platform/atlas/BRANDING.md`.
 
 ## Reference
 
@@ -98,7 +113,7 @@ agent** path depending on what you want to exercise.
 - Python 3.11 + [`uv`](https://docs.astral.sh/uv/) (0.8.x)
 - Node 20+ (for the atlas)
 - Julia 1.10 (optional; only needed once we wire the Sienna backend in
-  Phase 2–3; the pandapower backend stopgap in `gridagent-tools` runs
+  Phase 2–3; the pandapower backend stopgap in `platform/tools` runs
   without it)
 - Ollama or another OpenAI-compatible local LLM server (only for the
   agent path; the offline smoke test drives the exact same tool surface
@@ -107,7 +122,7 @@ agent** path depending on what you want to exercise.
 ### Data + dbt + atlas
 
 ```bash
-cd gridagent-data
+cd platform/data
 uv sync && source .venv/bin/activate
 
 # Bronze: pull RTS-GMLC (fast, ~100 KB) and PUDL (slower, ~500 MB).
@@ -119,18 +134,18 @@ python -m gridagent_data.cli ingest pudl
 python -m gridagent_data.cli dbt build
 
 # Atlas bundle: bundle.duckdb + one PMTiles per layer.
-python -m gridagent_data.cli bundle --atlas-public ../gridagent-atlas/public
+python -m gridagent_data.cli bundle --atlas-public ../atlas/public
 
-cd ../gridagent-atlas && npm install && npm run dev
+cd ../atlas && pnpm install && pnpm dev
 # → http://localhost:5173 with RTS-GMLC substations and lines rendered.
 ```
 
 Daily refresh path (for continuously updated demo data):
 
 ```bash
-cd gridagent-data && source .venv/bin/activate
+cd platform/data && source .venv/bin/activate
 export GRIDSTATUS_API_KEY=...   # optional but required for market pulls
-python -m gridagent_data.cli refresh-daily --atlas-public ../gridagent-atlas/public
+python -m gridagent_data.cli refresh-daily --atlas-public ../atlas/public
 ```
 
 This ingests GridStatus daily partitions (when key is set), rebuilds dbt models,
@@ -163,6 +178,6 @@ python -m gridagent_orchestrator.run \
 ## Repo conventions
 
 - Python: `uv` for dependency management, `ruff` lint, `pytest`.
-- Julia: standard `Pkg`, run with `julia --project gridagent-julia/run.jl ...`.
+- Julia: standard `Pkg`, run with `julia --project platform/julia/run.jl ...`.
 - TypeScript: `pnpm`, Vite.
 - All packages target Python ≥ 3.11 / Julia 1.10 / Node ≥ 20.

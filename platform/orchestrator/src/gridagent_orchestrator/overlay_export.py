@@ -151,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         "--output",
         type=Path,
         required=True,
-        help="Output .geojson path (e.g. gridagent-atlas/public/overlays/run.geojson)",
+        help="Output .geojson path (e.g. platform/atlas/public/overlays/run.geojson)",
     )
     parser.add_argument(
         "--bundle-root",

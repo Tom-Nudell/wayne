@@ -16,7 +16,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 gridagent-mcp = "gridagent_mcp.server:main"
 
 [tool.uv.sources]
-gridagent-tools = { path = "../gridagent-tools", editable = true }
+gridagent-tools = { path = "../tools", editable = true }
 
 [build-system]
 requires = ["hatchling"]

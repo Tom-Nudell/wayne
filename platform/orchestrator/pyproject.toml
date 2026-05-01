@@ -27,7 +27,7 @@ gridagent-orchestrator = "gridagent_orchestrator.run:main"
 gridagent-export-n1-overlay = "gridagent_orchestrator.overlay_export:main"
 
 [tool.uv.sources]
-gridagent-tools = { path = "../gridagent-tools", editable = true }
+gridagent-tools = { path = "../tools", editable = true }
 
 [build-system]
 requires = ["hatchling"]

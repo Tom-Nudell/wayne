@@ -12,7 +12,7 @@ Two-phase pipeline:
      the user installs it once via ``brew install tippecanoe`` or the
      upstream build. When ``tippecanoe`` is not on PATH we stop after
      phase 1 and return the GeoJSON paths, so callers can still drop
-     intermediate files in ``gridagent-atlas/public/``.
+     intermediate files in ``platform/atlas/public/``.
 """
 
 from __future__ import annotations

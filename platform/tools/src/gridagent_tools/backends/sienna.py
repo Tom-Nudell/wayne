@@ -2,9 +2,9 @@
 
 Calls into the NREL Sienna stack (`PowerSystems.jl` + `PowerFlows.jl` +
 `PowerNetworkMatrices.jl` + `PowerSimulations.jl`) via the Julia entrypoint
-at ``gridagent-julia/run.jl``. Two execution modes:
+at ``platform/julia/run.jl``. Two execution modes:
 
-* **subprocess** (default) — `julia --project gridagent-julia/run.jl ...`.
+* **subprocess** (default) — `julia --project platform/julia/run.jl ...`.
   Requires Julia installed locally; expected for dev.
 * **container** — `docker run --rm gridagent/sienna:latest ...`. Expected
   for CI and production. Toggle with env var ``GRIDAGENT_SIENNA_RUNNER``.
@@ -24,7 +24,7 @@ from typing import Any
 from ..snapshot import Snapshot
 from .protocol import BackendUnavailable, register_backend
 
-_DEFAULT_JULIA_ROOT = Path(__file__).resolve().parents[5] / "gridagent-julia"
+_DEFAULT_JULIA_ROOT = Path(__file__).resolve().parents[5] / "platform" / "julia"
 
 
 def _runner_command() -> list[str]:

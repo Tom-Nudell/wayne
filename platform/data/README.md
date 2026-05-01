@@ -76,10 +76,10 @@ uv run python -m gridagent_data.cli dbt build
 #    command writes bundle.duckdb (DuckDB-WASM) + one PMTiles per layer,
 #    and — with --atlas-public — mirrors them into the Vite dev server.
 uv run python -m gridagent_data.cli bundle \
-    --atlas-public ../gridagent-atlas/public
+    --atlas-public ../atlas/public
 
 # 4. Run the frontend.
-cd ../gridagent-atlas && npm install && npm run dev
+cd ../atlas && pnpm install && pnpm dev
 ```
 
 `tippecanoe` is optional at step 3: the bundle command falls back to
@@ -91,14 +91,14 @@ can render without installing the native binary first.
 Use `refresh-daily` to keep atlas artifacts fresh with one command:
 
 ```bash
-cd gridagent-data
+cd platform/data
 uv sync && source .venv/bin/activate
 
 # Optional but recommended for market partitions:
 export GRIDSTATUS_API_KEY=...
 
 python -m gridagent_data.cli refresh-daily \
-  --atlas-public ../gridagent-atlas/public
+  --atlas-public ../atlas/public
 ```
 
 - Default day is **yesterday (UTC)**.
@@ -120,7 +120,7 @@ Queue feed providers:
 Run it every day via cron (example: 06:10 local time):
 
 ```bash
-10 6 * * * cd /abs/path/to/wayne/gridagent-data && source .venv/bin/activate && python -m gridagent_data.cli refresh-daily --atlas-public ../gridagent-atlas/public >> ../data_root/refresh.log 2>&1
+10 6 * * * cd /abs/path/to/wayne/platform/data && source .venv/bin/activate && python -m gridagent_data.cli refresh-daily --atlas-public ../atlas/public >> ../data_root/refresh.log 2>&1
 ```
 
 See `../README.md` for how this fits into the wider gridagent platform.

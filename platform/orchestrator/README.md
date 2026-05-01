@@ -85,7 +85,7 @@ After a run that includes ``run_n1_contingency``, drop an atlas overlay (GeoJSON
 ```bash
 uv run gridagent-orchestrator \
   --goal "…" \
-  --atlas-overlay-dir /abs/path/to/gridagent-atlas/public/overlays
+  --atlas-overlay-dir /abs/path/to/wayne/platform/atlas/public/overlays
 # → open the atlas with ?overlay=overlays/episode_<id>_overlay.geojson
 ```
 
@@ -94,5 +94,5 @@ Or export from an existing log:
 ```bash
 uv run gridagent-export-n1-overlay \
   data_root/episodes/episode_abc123.jsonl \
-  -o ../gridagent-atlas/public/overlays/demo.geojson
+  -o ../atlas/public/overlays/demo.geojson
 ```
