@@ -35,6 +35,7 @@ TILE_LAYERS: dict[str, str] = {
     "data_center": "data_centers.pmtiles",
     "gas_pipeline": "gas_pipelines.pmtiles",
     "distribution_feeder": "distribution_feeders.pmtiles",
+    "queue_project": "queue_projects.pmtiles",
 }
 
 # Per-kind tippecanoe invocation. Plants and substations are point layers
@@ -47,6 +48,7 @@ _TIPPECANOE_FLAGS: dict[str, list[str]] = {
     "data_center": ["-zg", "-l", "data_centers"],
     "gas_pipeline": ["-zg", "-l", "gas_pipelines"],
     "distribution_feeder": ["-z14", "-l", "distribution_feeders"],
+    "queue_project": ["-zg", "--drop-densest-as-needed", "-l", "queue_projects"],
 }
 
 

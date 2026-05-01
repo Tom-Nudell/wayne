@@ -44,6 +44,7 @@ def run_episode(
     model: str | None = None,
     base_url: str | None = None,
     verifier: Verifier | None = None,
+    atlas_overlay_dir: Path | None = None,
 ) -> Episode:
     """Drive a single episode end-to-end and return the persisted log."""
     episode = Episode.new(goal=goal, root=_episode_root())
@@ -56,6 +57,18 @@ def run_episode(
     except RuntimeError as exc:
         # Verifier ABORT or unrecoverable model retry exhaustion.
         episode.finish(summary=f"Aborted: {exc}")
+
+    if atlas_overlay_dir is not None:
+        from .overlay_export import write_n1_overlay_from_episode
+
+        out = atlas_overlay_dir / f"episode_{episode.episode_id}_overlay.geojson"
+        try:
+            n = write_n1_overlay_from_episode(episode.log_path, out)
+            rel = f"overlays/{out.name}"
+            print(f"Atlas overlay: {n} features → {out} (open atlas with ?overlay={rel})")
+        except (ValueError, FileNotFoundError) as exc:
+            print(f"Atlas overlay skipped: {exc}", flush=True)
+
     return episode
 
 
@@ -72,9 +85,20 @@ def main() -> None:
         default=None,
         help="OpenAI-compatible base URL (default: $GRIDAGENT_LLM_BASE_URL or http://localhost:11434/v1).",
     )
+    parser.add_argument(
+        "--atlas-overlay-dir",
+        type=Path,
+        default=None,
+        help="Write episode_<id>_overlay.geojson here for the atlas (?overlay=…).",
+    )
     args = parser.parse_args()
 
-    episode = run_episode(args.goal, model=args.model, base_url=args.base_url)
+    episode = run_episode(
+        args.goal,
+        model=args.model,
+        base_url=args.base_url,
+        atlas_overlay_dir=args.atlas_overlay_dir,
+    )
     print(f"Episode {episode.episode_id} written to {episode.log_path}")
 
 

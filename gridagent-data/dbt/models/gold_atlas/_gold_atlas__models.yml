@@ -15,6 +15,7 @@ models:
           - not_null
           - accepted_values:
               values: ['plant', 'unit', 'substation', 'transmission_line',
-                       'data_center', 'gas_pipeline', 'distribution_feeder']
+                       'data_center', 'gas_pipeline', 'distribution_feeder',
+                       'queue_project']
       - name: sources
         tests: [not_null]

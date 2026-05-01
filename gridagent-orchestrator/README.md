@@ -79,3 +79,20 @@ ollama pull gemma4:e12b   # one-time, ~8 GB
 uv run gridagent-orchestrator \
   --goal "Add 2 GW of solar at the largest substation in ERCOT and run an N-1 study."
 ```
+
+After a run that includes ``run_n1_contingency``, drop an atlas overlay (GeoJSON of overloaded branches) next to the static site:
+
+```bash
+uv run gridagent-orchestrator \
+  --goal "…" \
+  --atlas-overlay-dir /abs/path/to/gridagent-atlas/public/overlays
+# → open the atlas with ?overlay=overlays/episode_<id>_overlay.geojson
+```
+
+Or export from an existing log:
+
+```bash
+uv run gridagent-export-n1-overlay \
+  data_root/episodes/episode_abc123.jsonl \
+  -o ../gridagent-atlas/public/overlays/demo.geojson
+```

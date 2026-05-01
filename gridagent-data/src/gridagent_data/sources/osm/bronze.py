@@ -1,8 +1,11 @@
-"""Pull OSM ``power=*`` features from Overpass into the bronze layer.
+"""Pull OSM power + gas-pipeline features from Overpass into bronze.
 
 Overpass QL returns JSON with separate ``elements`` for nodes, ways and
-relations. We request all four ``power=*`` subtags we care about in one
-query per region so a single call gets the complete set for that region.
+relations. We request:
+
+* all ``power=*`` objects (nodes/ways/relations), and
+* gas pipelines (ways/relations where ``man_made=pipeline`` and
+  ``substance=gas``).
 
 Retry policy is conservative — Overpass instances throttle aggressively.
 Respect ``Retry-After`` when present and fall back to exponential
@@ -52,6 +55,8 @@ area["ISO3166-2"="{iso}"]->.searchArea;
   node["power"](area.searchArea);
   way["power"](area.searchArea);
   relation["power"](area.searchArea);
+  way["man_made"="pipeline"]["substance"="gas"](area.searchArea);
+  relation["man_made"="pipeline"]["substance"="gas"](area.searchArea);
 );
 out body geom;
 """
@@ -65,7 +70,9 @@ def _query_for(region: OverpassRegion) -> str:
             "[out:json][timeout:180];"
             f"(node[\"power\"]({south},{west},{north},{east});"
             f" way[\"power\"]({south},{west},{north},{east});"
-            f" relation[\"power\"]({south},{west},{north},{east}););"
+            f" relation[\"power\"]({south},{west},{north},{east});"
+            f" way[\"man_made\"=\"pipeline\"][\"substance\"=\"gas\"]({south},{west},{north},{east});"
+            f" relation[\"man_made\"=\"pipeline\"][\"substance\"=\"gas\"]({south},{west},{north},{east}););"
             "out body geom;"
         )
     return _QUERY_TEMPLATE.format(iso=region.area)

@@ -86,4 +86,41 @@ cd ../gridagent-atlas && npm install && npm run dev
 writing intermediate GeoJSON (still viewable via deck.gl) so the atlas
 can render without installing the native binary first.
 
+### Daily refresh (market + atlas bundle)
+
+Use `refresh-daily` to keep atlas artifacts fresh with one command:
+
+```bash
+cd gridagent-data
+uv sync && source .venv/bin/activate
+
+# Optional but recommended for market partitions:
+export GRIDSTATUS_API_KEY=...
+
+python -m gridagent_data.cli refresh-daily \
+  --atlas-public ../gridagent-atlas/public
+```
+
+- Default day is **yesterday (UTC)**.
+- GridStatus partition failures are logged and skipped so bundle export still runs.
+- Queue feed is pulled automatically from `GRIDAGENT_QUEUE_CSV_URL` when set.
+- `dbt run` is used (not `dbt build`) so daily refresh is not blocked by test failures.
+
+Queue feed contract (CSV columns expected by the silver model):
+
+`project_id,snapshot_date,iso_region,queue_status,fuel_type,capacity_mw,queue_date,proposed_completion_date,point_of_interconnection,poi_latitude,poi_longitude,source,license`
+
+Queue feed providers:
+
+- `GRIDAGENT_QUEUE_PROVIDER=csv_url` (default) with `GRIDAGENT_QUEUE_CSV_URL=...`
+- `GRIDAGENT_QUEUE_PROVIDER=interconnection_fyi_public` (uses public state pages;
+  emits deterministic jittered coordinates around state centroids because source
+  pages do not include exact lat/lon per project).
+
+Run it every day via cron (example: 06:10 local time):
+
+```bash
+10 6 * * * cd /abs/path/to/wayne/gridagent-data && source .venv/bin/activate && python -m gridagent_data.cli refresh-daily --atlas-public ../gridagent-atlas/public >> ../data_root/refresh.log 2>&1
+```
+
 See `../README.md` for how this fits into the wider gridagent platform.

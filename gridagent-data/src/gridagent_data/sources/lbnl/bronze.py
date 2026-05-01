@@ -13,8 +13,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 import httpx
 
@@ -105,6 +107,36 @@ def fetch_release(
         "url": release.url,
         "filename": release.filename,
         "etag": etag,
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload),
+        "retrieved_at": now_utc().isoformat(),
+        "path": str(target.relative_to(_paths.BRONZE.parent)),
+    }
+    (target_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    return manifest
+
+
+def adopt_release(local_path: str | Path, *, year: int | None = None) -> dict:
+    """Adopt a manually downloaded Queued Up workbook into bronze.
+
+    Useful when LBNL rotates links and direct fetch URLs change.
+    """
+    ensure_dirs()
+    src = Path(local_path)
+    if not src.is_file():
+        raise FileNotFoundError(f"LBNL workbook not found at {src}")
+    release_year = year or DEFAULT_RELEASE.year
+    target_dir = _paths.BRONZE / "lbnl_queued_up" / f"release_{release_year}"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / src.name
+    shutil.copy2(src, target)
+    payload = target.read_bytes()
+    manifest = {
+        "release_year": release_year,
+        "source": asdict(LBNL_QUEUED_UP),
+        "url": "manual_local_file",
+        "filename": src.name,
+        "etag": "",
         "sha256": hashlib.sha256(payload).hexdigest(),
         "bytes": len(payload),
         "retrieved_at": now_utc().isoformat(),

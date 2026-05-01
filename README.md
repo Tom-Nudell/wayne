@@ -125,6 +125,17 @@ cd ../gridagent-atlas && npm install && npm run dev
 # → http://localhost:5173 with RTS-GMLC substations and lines rendered.
 ```
 
+Daily refresh path (for continuously updated demo data):
+
+```bash
+cd gridagent-data && source .venv/bin/activate
+export GRIDSTATUS_API_KEY=...   # optional but required for market pulls
+python -m gridagent_data.cli refresh-daily --atlas-public ../gridagent-atlas/public
+```
+
+This ingests GridStatus daily partitions (when key is set), rebuilds dbt models,
+and republishes `bundle.duckdb` + PMTiles into the atlas `public/` directory.
+
 ### Agent loop
 
 Offline (no LLM, scripted plan — the CI path):
