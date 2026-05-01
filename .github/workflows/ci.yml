@@ -101,3 +101,55 @@ jobs:
             platform/orchestrator/src \
             platform/data/src \
             platform/data/tests
+
+  schema-drift:
+    # Source of truth: platform/data/.../schema/models.py
+    # Target:          shared/schema/src/index.ts
+    # If they disagree, the generator exits 2 with the regen command.
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install pydantic
+        run: uv pip install --system pydantic
+
+      - name: Schema drift check
+        run: |
+          PYTHONPATH=platform/data/src python -m gridagent_data.schema.generate_ts \
+            --out shared/schema/src/index.ts --check
+
+  web:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.33.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Web typecheck
+        run: pnpm --filter @wayne/web check
+
+      - name: Tile-worker typecheck
+        run: pnpm --filter @wayne/tile-worker check
+
+      - name: Web build
+        run: pnpm --filter @wayne/web build

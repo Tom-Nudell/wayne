@@ -123,4 +123,17 @@ Run it every day via cron (example: 06:10 local time):
 10 6 * * * cd /abs/path/to/wayne/platform/data && source .venv/bin/activate && python -m gridagent_data.cli refresh-daily --atlas-public ../atlas/public >> ../data_root/refresh.log 2>&1
 ```
 
-See `../README.md` for how this fits into the wider gridagent platform.
+### Cross-language schema seam
+
+The Pydantic models in `src/gridagent_data/schema/models.py` are the source of truth for `GridFeature`, `Manifest`, and `LicenseSidecar`. TS types in `shared/schema/` are generated from them; CI fails on drift.
+
+Regenerate from the repo root after editing `models.py`:
+
+```bash
+PYTHONPATH=platform/data/src python -m gridagent_data.schema.generate_ts \
+  --out shared/schema/src/index.ts
+```
+
+See [`shared/schema/README.md`](../../shared/schema/README.md) for the model-adding workflow and supported Python typing forms.
+
+See `../../README.md` for how this fits into the wider gridagent platform.
