@@ -22,6 +22,12 @@ const BASEMAP_GLYPHS_URL =
 const ATTRIBUTION =
   '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
 
+// Override the theme's background color so the canvas reads as bone
+// during tile load instead of the theme default. The named theme
+// already includes a `background` layer, so we don't add our own —
+// duplicate layer ids fail style validation.
+const theme = { ...namedTheme('light'), background: PALETTE.bone };
+
 export const baseStyle = {
   version: 8 as const,
   glyphs: BASEMAP_GLYPHS_URL,
@@ -32,12 +38,5 @@ export const baseStyle = {
       attribution: ATTRIBUTION
     }
   },
-  layers: [
-    {
-      id: 'background',
-      type: 'background' as const,
-      paint: { 'background-color': PALETTE.bone }
-    },
-    ...layers('protomaps', namedTheme('light'))
-  ]
+  layers: layers('protomaps', theme)
 };
