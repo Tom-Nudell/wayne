@@ -6,4 +6,11 @@
 
 export { PALETTE } from './palette.js';
 export type { PaletteKey } from './palette.js';
+
 export { baseStyle } from './styles/base.js';
+export {
+  wayneLayers,
+  wayneLayerIds,
+  wayneSources,
+  type WayneSourceConfig
+} from './layers/wayne.js';

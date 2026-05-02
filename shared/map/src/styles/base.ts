@@ -1,19 +1,20 @@
 // MapLibre StyleSpecification for the Wayne base map.
 //
-// Sources Protomaps' public demo PMTiles for local dev. Real
-// production setup (Phase 1) hosts our own copy of the Protomaps US
-// build on R2; the only line that changes is BASEMAP_TILES_URL.
+// Composes the Protomaps light theme as a basemap with Wayne's
+// energy-infrastructure layers (transmission, substations, plants, gas
+// pipelines, queue projects) inserted between basemap fills and place
+// labels — so the data sits on top of the geography but the labels
+// stay readable.
 //
-// The forked Protomaps light theme provides land, water, transit,
-// boundaries, and places out of the box. Our energy-infrastructure
-// layers stack on top via shared/map/src/layers/ in Phase 1.
+// Tile sources use VITE_TILE_BASE so the same code runs against:
+//   - dev:  /tiles (web/static/tiles, populated by web/scripts/link-tiles.sh)
+//   - prod: https://tiles.<domain>/layers (Cloudflare Worker → R2)
 
 import { layers, namedTheme } from 'protomaps-themes-base';
 
+import { wayneLayers, wayneSources } from '../layers/wayne.js';
 import { PALETTE } from '../palette.js';
 
-// Phase 1 swap: replace with our R2-hosted PMTiles archive, e.g.
-// `pmtiles://https://tiles.<our-domain>/basemap/protomaps-us-v<date>.pmtiles`.
 const BASEMAP_TILES_URL = 'pmtiles://https://demo-bucket.protomaps.com/v4.pmtiles';
 
 const BASEMAP_GLYPHS_URL =
@@ -22,11 +23,20 @@ const BASEMAP_GLYPHS_URL =
 const ATTRIBUTION =
   '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org">OpenStreetMap</a>';
 
+const TILE_BASE: string =
+  (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env?.VITE_TILE_BASE ??
+  '/tiles';
+
 // Override the theme's background color so the canvas reads as bone
 // during tile load instead of the theme default. The named theme
-// already includes a `background` layer, so we don't add our own —
-// duplicate layer ids fail style validation.
+// already includes a `background` layer.
 const theme = { ...namedTheme('light'), background: PALETTE.bone };
+const themeLayers = layers('protomaps', theme);
+
+// Insert Wayne layers under place labels so labels stay readable on top.
+// Symbol layers in the Protomaps theme are the labels; keep those last.
+const labelLayers = themeLayers.filter((l) => l.type === 'symbol');
+const baseLayers = themeLayers.filter((l) => l.type !== 'symbol');
 
 export const baseStyle = {
   version: 8 as const,
@@ -36,7 +46,8 @@ export const baseStyle = {
       type: 'vector' as const,
       url: BASEMAP_TILES_URL,
       attribution: ATTRIBUTION
-    }
+    },
+    ...wayneSources({ tileBase: TILE_BASE })
   },
-  layers: layers('protomaps', theme)
+  layers: [...baseLayers, ...wayneLayers, ...labelLayers]
 };

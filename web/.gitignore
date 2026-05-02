@@ -7,3 +7,7 @@ build/
 !.env.example
 package-lock.json
 yarn.lock
+
+# Symlinked locally by web/scripts/link-tiles.sh; the canonical source
+# lives under data_root/bundle/. In production these come from R2.
+static/tiles
