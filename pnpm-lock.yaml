@@ -42,6 +42,9 @@ importers:
       maplibre-gl:
         specifier: ^4.5.0
         version: 4.7.1
+      protomaps-themes-base:
+        specifier: ^4.3.0
+        version: 4.5.0
 
   shared/schema: {}
 
@@ -1419,6 +1422,10 @@ packages:
   protocol-buffers-schema@3.6.1:
     resolution: {integrity: sha512-VG2K63Igkiv9p76tk1lilczEK1cT+kCjKtkdhw1dQZV3k3IXJbd3o6Ho8b9zJZaHSnT2hKe4I+ObmX9w6m5SmQ==}
 
+  protomaps-themes-base@4.5.0:
+    resolution: {integrity: sha512-z5A6oXAXNi/CHEIbCfzZ/6uVDgnv3pO4C3LFvomxjUFXwyqWZ7HJdfPoNJSIlsvaQubqsaxCbamEzqBr/W7vkg==}
+    deprecated: This package has been migrated to @protomaps/basemaps with a new major version. See the CHANGELOG at https://github.com/protomaps/basemaps/blob/main/CHANGELOG.md for how to migrate.
+
   quickselect@2.0.0:
     resolution: {integrity: sha512-RKJ22hX8mHe3Y6wH/N3wCM6BWtjaxIyyUIkpHOvfFnxdI4yD4tBXEBKSbriGujF6jnSVkJrffuo6vxACiSSxIw==}
 
@@ -2716,6 +2723,8 @@ snapshots:
   printable-characters@1.0.42: {}
 
   protocol-buffers-schema@3.6.1: {}
+
+  protomaps-themes-base@4.5.0: {}
 
   quickselect@2.0.0: {}
 

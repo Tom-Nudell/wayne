@@ -30,7 +30,10 @@
       style: baseStyle,
       center,
       zoom,
-      attributionControl: false
+      // Default attribution control is on; the source's `attribution`
+      // field surfaces here. Phase 1 will replace this with our own
+      // control that renders from license.json sidecars per zoom.
+      attributionControl: { compact: true }
     });
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'top-right');
