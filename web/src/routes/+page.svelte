@@ -7,8 +7,8 @@
   <h1>{BRAND.productName ?? BRAND.internal}</h1>
   <p class="tag">A living network of US energy infrastructure.</p>
   <p class="placeholder">
-    This is the marketing landing scaffold. The map ships in Phase 1; auth + Pro
-    in Phase 2; launch in Phase 3. See <code>grid-map-engineering-brief.md</code>
+    This is the marketing landing scaffold. The map ships in Phase 1; auth + Pro in Phase 2; launch
+    in Phase 3. See <code>grid-map-engineering-brief.md</code>
     at the repo root.
   </p>
   <div class="palette" aria-hidden="true">

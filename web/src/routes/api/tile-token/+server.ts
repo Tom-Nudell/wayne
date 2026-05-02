@@ -22,8 +22,5 @@ export const POST: RequestHandler = async ({ request }) => {
   const body = (await request.json()) as TileTokenRequest;
   void body;
 
-  return error(
-    501,
-    'tile-token endpoint not yet implemented (Phase 2: Clerk + ES256 JWT)'
-  );
+  return error(501, 'tile-token endpoint not yet implemented (Phase 2: Clerk + ES256 JWT)');
 };

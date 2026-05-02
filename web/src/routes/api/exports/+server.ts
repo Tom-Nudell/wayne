@@ -16,8 +16,5 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async () => {
-  return error(
-    501,
-    'exports endpoint not yet implemented (Phase 2: PNG/CSV worker + rate limit)'
-  );
+  return error(501, 'exports endpoint not yet implemented (Phase 2: PNG/CSV worker + rate limit)');
 };

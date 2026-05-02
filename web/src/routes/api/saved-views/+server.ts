@@ -21,8 +21,5 @@ export const GET: RequestHandler = async () => {
 };
 
 export const POST: RequestHandler = async () => {
-  return error(
-    501,
-    'saved-views POST not yet implemented (Phase 2: Postgres + tier cap)'
-  );
+  return error(501, 'saved-views POST not yet implemented (Phase 2: Postgres + tier cap)');
 };

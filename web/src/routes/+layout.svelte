@@ -1,7 +1,5 @@
 <script lang="ts">
   import { BRAND } from '@wayne/ui/brand';
-  import { SPACING, TYPE_SCALE } from '@wayne/ui/tokens';
-  import { PALETTE } from '@wayne/map/palette';
 
   const { children } = $props();
 </script>
