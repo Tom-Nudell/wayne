@@ -28,6 +28,7 @@ dev = [
 
 [project.scripts]
 gridagent-data = "gridagent_data.cli:main"
+gridagent-qa-gate = "gridagent_data.qa.gate:main"
 
 [build-system]
 requires = ["hatchling"]
