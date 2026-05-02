@@ -9,8 +9,19 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "size": "size-limit"
   },
+  "size-limit": [
+    {
+      "name": "initial JS (entry + shared chunks)",
+      "path": [
+        ".svelte-kit/output/client/_app/immutable/entry/*.js",
+        ".svelte-kit/output/client/_app/immutable/chunks/*.js"
+      ],
+      "limit": "250 KB"
+    }
+  ],
   "dependencies": {
     "@wayne/api": "workspace:*",
     "@wayne/map": "workspace:*",
@@ -24,6 +35,8 @@
     "@types/node": "^20.16.0",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@size-limit/preset-app": "^11.1.0",
+    "size-limit": "^11.1.0",
     "svelte": "^5.1.0",
     "svelte-check": "^4.0.0",
     "typescript": "^5.6.0",

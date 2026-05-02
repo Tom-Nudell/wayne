@@ -153,3 +153,6 @@ jobs:
 
       - name: Web build
         run: pnpm --filter @wayne/web build
+
+      - name: Web bundle budget (size-limit, brief §9)
+        run: pnpm --filter @wayne/web size
