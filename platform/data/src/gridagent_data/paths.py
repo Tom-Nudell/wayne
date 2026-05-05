@@ -10,7 +10,9 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-_DEFAULT_ROOT = Path(__file__).resolve().parents[3] / "data_root"
+# `__file__` is at platform/data/src/gridagent_data/paths.py; parents[4]
+# resolves to the wayne/ repo root so data_root/ sits alongside platform/.
+_DEFAULT_ROOT = Path(__file__).resolve().parents[4] / "data_root"
 
 DATA_ROOT = Path(os.environ.get("GRIDAGENT_DATA_ROOT", _DEFAULT_ROOT))
 
