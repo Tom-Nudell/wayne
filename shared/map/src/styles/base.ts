@@ -31,7 +31,31 @@ const TILE_BASE: string =
 // during tile load instead of the theme default. The named theme
 // already includes a `background` layer.
 const theme = { ...namedTheme('light'), background: PALETTE.bone };
-const themeLayers = layers('protomaps', theme);
+
+// The Protomaps theme ships ~57 layers including POI fills (hospitals,
+// schools, industrial, military, aerodromes, beaches, zoos) and per-
+// building polygons. On a continental US energy infrastructure map at
+// low zoom these read as random colored squares — noise that competes
+// with our power layers for visual attention. Drop them; keep only the
+// "calm context" layers: earth, parks, water, roads, boundaries.
+const NOISY_BASEMAP_IDS = new Set<string>([
+  'landuse_hospital',
+  'landuse_industrial',
+  'landuse_school',
+  'landuse_beach',
+  'landuse_zoo',
+  'landuse_aerodrome',
+  'landuse_runway',
+  'landuse_pedestrian',
+  'landuse_pier',
+  'buildings',
+  'roads_runway',
+  'roads_taxiway'
+]);
+
+const themeLayers = layers('protomaps', theme).filter(
+  (l) => !NOISY_BASEMAP_IDS.has(l.id)
+);
 
 // Insert Wayne layers under place labels so labels stay readable on top.
 // Symbol layers in the Protomaps theme are the labels; keep those last.

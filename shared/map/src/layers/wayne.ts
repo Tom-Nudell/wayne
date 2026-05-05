@@ -24,12 +24,15 @@ export function wayneSources(
     type: 'vector',
     url: `pmtiles://${cfg.tileBase}/${name}.pmtiles`
   });
+  // Note: wayne-queue-projects is intentionally absent until the LBNL
+  // Queued Up bronze loader produces real per-project coordinates. The
+  // interconnection_fyi_public scraper jitters coordinates around state
+  // centroids, which renders as visible rectangles on the map.
   return {
     'wayne-transmission-lines': t('transmission_lines'),
     'wayne-substations': t('substations'),
     'wayne-plants': t('plants'),
-    'wayne-gas-pipelines': t('gas_pipelines'),
-    'wayne-queue-projects': t('queue_projects')
+    'wayne-gas-pipelines': t('gas_pipelines')
   };
 }
 
@@ -157,32 +160,9 @@ export const wayneLayers: LayerSpecification[] = [
       'circle-opacity': 0.85
     }
   },
-  // Pinpoints for interconnection-queue projects (mitigation green so
-  // they're visible against the calm base; not an alarm color in this
-  // context — the layer is opt-in).
-  {
-    id: 'wayne-queue-projects',
-    type: 'circle',
-    source: 'wayne-queue-projects',
-    'source-layer': 'queue_projects',
-    paint: {
-      'circle-radius': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        4,
-        1.2,
-        9,
-        3.0,
-        12,
-        5.2
-      ],
-      'circle-color': PALETTE.mitigation,
-      'circle-stroke-color': PALETTE.loam900,
-      'circle-stroke-width': 0.5,
-      'circle-opacity': 0.8
-    }
-  }
+  // Interconnection queue layer is intentionally omitted — see comment
+  // in wayneSources(). It returns when LBNL Queued Up bronze data has
+  // real per-project lat/lon.
 ];
 
 /** IDs of the Wayne layers in z-order (bottom → top). */
