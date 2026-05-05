@@ -25,6 +25,8 @@ from pathlib import Path
 
 import duckdb
 
+from gridagent_data.exporters.licenses import write_sidecar
+
 # One PMTiles file per ``kind`` so the frontend can toggle layers without
 # downloading geometry it won't render. Keys here must match ``kind`` values
 # emitted by ``gold_atlas__infrastructure_features``.
@@ -57,6 +59,7 @@ class TileExportResult:
     kind: str
     geojson_path: Path
     pmtiles_path: Path | None  # None when tippecanoe is unavailable.
+    sidecar_path: Path
     feature_count: int
 
 
@@ -176,6 +179,7 @@ def export(
                 geojson_path,
             )
             pmtiles_path = out_dir / pmtiles_name
+            sidecar_path = pmtiles_path.with_suffix(".license.json")
             if count > 0 and have_tippecanoe:
                 subprocess.run(
                     [
@@ -190,11 +194,28 @@ def export(
                 )
             else:
                 pmtiles_path = pmtiles_path if pmtiles_path.exists() else None
+
+            # Always write the sidecar when the layer has features, even
+            # if tippecanoe wasn't available — the sidecar is the
+            # source of truth for attribution and the QA gate's license
+            # check looks for it next to the planned PMTiles location.
+            if count > 0:
+                write_sidecar(
+                    conn,
+                    warehouse_schema="main_gold_atlas",
+                    warehouse_table="gold_atlas__infrastructure_features",
+                    kind=kind,
+                    layer_name=pmtiles_name.removesuffix(".pmtiles"),
+                    feature_count=count,
+                    sidecar_path=sidecar_path,
+                )
+
             results.append(
                 TileExportResult(
                     kind=kind,
                     geojson_path=geojson_path,
                     pmtiles_path=pmtiles_path if (have_tippecanoe and count > 0) else None,
+                    sidecar_path=sidecar_path,
                     feature_count=count,
                 )
             )
