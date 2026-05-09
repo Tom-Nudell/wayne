@@ -9,12 +9,15 @@ Subcommands:
 * ``ingest hifld``           — HIFLD archived substations + transmission → bronze.
 * ``ingest osm``             — OSM ``power=*`` Overpass query for a region → bronze.
 * ``ingest pypsa_usa PATH``  — adopt a pre-built ``elec.nc`` into bronze.
+* ``ingest afdc``            — NREL AFDC EV charging stations → bronze.
 * ``snapshot rts``           — assemble a Snapshot bundle from RTS-GMLC bronze.
 * ``dbt <subcommand>``       — run dbt against the in-tree project.
-* ``bundle [atlas-public]``  — export warehouse → ``bundle.duckdb`` + PMTiles;
-                               optional ``--atlas-public DIR`` drops the bundle
-                               and tiles into the atlas frontend's ``public/``.
+* ``bundle [atlas-public]``  — export warehouse → ``bundle.duckdb`` + PMTiles +
+                               ``manifest.json``; optional ``--atlas-public DIR``
+                               drops the bundle and tiles into the atlas frontend.
 * ``list``                   — show what's in BUNDLE.
+* ``qa screenshot``          — capture reference-viewport screenshots for review.
+* ``qa approve-baseline``    — promote reviewed screenshots to the approved baseline.
 
 Heavier orchestration (silver dbt models, gold marts, scheduling) lives in
 the Dagster job graph; the CLI is for the bring-up path and developer loops.
@@ -199,6 +202,15 @@ def cmd_ingest_queue_feed(source_url: str | None) -> int:
     return 0
 
 
+def cmd_ingest_afdc(api_key: str | None = None) -> int:
+    from gridagent_data.sources.afdc.bronze import fetch_ev_stations
+
+    print("Fetching AFDC EV charging stations…")
+    m = fetch_ev_stations(api_key=api_key)
+    print(f"  · {m.station_count:,} stations → {m.path}")
+    return 0
+
+
 def cmd_ingest_pypsa_usa(source_path: str | None, *, label: str) -> int:
     from gridagent_data.sources.pypsa_usa import adopt_elec_nc, fetch_elec_nc
 
@@ -271,6 +283,12 @@ def cmd_bundle(
         suffix = r.pmtiles_path.name if r.pmtiles_path else "(geojson only; tippecanoe not on PATH)"
         print(f"  · {r.kind}: {r.feature_count} features → {suffix}")
 
+    # Manifest — written as unapproved; caller must run 'qa approve-baseline'
+    # (or the QA gate) before promoting to R2.
+    from gridagent_data.exporters.manifest import write_manifest
+    manifest_path = write_manifest(tile_dir)
+    print(f"Wrote {manifest_path} (unapproved — QA gate must pass before promotion)")
+
     if atlas_public is not None:
         atlas_public.mkdir(parents=True, exist_ok=True)
         to_duckdb.copy_to_atlas_public(bundle_path, atlas_public)
@@ -285,6 +303,57 @@ def cmd_bundle(
                     _shutil.copy2(src, tile_public / src.name)
         print(f"Copied bundle + tiles into {atlas_public}")
 
+    return 0
+
+
+def cmd_qa_screenshot(bundle_dir: Path, out_dir: Path | None) -> int:
+    """Capture reference-viewport screenshots from *bundle_dir*."""
+    from gridagent_data.qa.visual import capture_screenshots
+
+    effective_out = out_dir or (bundle_dir / "pending_screenshots")
+    print(f"Capturing screenshots from {bundle_dir} → {effective_out}")
+    try:
+        paths = capture_screenshots(bundle_dir, effective_out)
+    except ImportError as exc:
+        print(
+            f"Missing qa dependencies: {exc}\n"
+            "Install with: uv pip install -e '.[qa]' && playwright install chromium",
+            file=sys.stderr,
+        )
+        return 2
+    for p in paths:
+        print(f"  · {p.name}")
+    print(f"\nReview the {len(paths)} screenshots above, then run:")
+    print(
+        f"  gridagent-data qa approve-baseline "
+        f"--pending-dir {effective_out} --message '<description>'"
+    )
+    return 0
+
+
+def cmd_qa_approve_baseline(
+    pending_dir: Path,
+    baseline_dir: Path,
+    message: str,
+) -> int:
+    """Promote *pending_dir* screenshots to the approved baseline."""
+    from gridagent_data.qa.baseline import approve_baseline
+
+    try:
+        record = approve_baseline(
+            pending_dir=pending_dir,
+            baseline_dir=baseline_dir,
+            message=message,
+        )
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+
+    print(
+        f"Baseline approved: {record['viewport_count']} viewports → {baseline_dir}\n"
+        f"Message: {record['message'] or '(none)'}\n"
+        f"Approved at: {record['approved_at']}"
+    )
     return 0
 
 
@@ -306,7 +375,7 @@ def main(argv: list[str] | None = None) -> int:
     ing = sub.add_parser("ingest", help="Pull a source into bronze.")
     ing.add_argument(
         "source",
-        choices=["pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm", "pypsa_usa", "queue_feed"],
+        choices=["pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm", "pypsa_usa", "queue_feed", "afdc"],
     )
     ing.add_argument("path", nargs="?", help="Source path / URL (for pypsa_usa).")
     ing.add_argument("--iso", default="ercot", help="ISO code (gridstatus only).")
@@ -318,6 +387,30 @@ def main(argv: list[str] | None = None) -> int:
     ing.add_argument(
         "--label", default="default", help="Sub-label under bronze (pypsa_usa only)."
     )
+    ing.add_argument(
+        "--api-key", default=None, help="API key override (afdc only; default: $AFDC_API_KEY)."
+    )
+
+    qa_cmd = sub.add_parser("qa", help="Visual QA gate utilities.")
+    qa_sub = qa_cmd.add_subparsers(dest="qa_action", required=True)
+
+    qa_ss = qa_sub.add_parser("screenshot", help="Capture reference-viewport screenshots.")
+    qa_ss.add_argument("--bundle-dir", required=True, type=Path, help="Bundle output directory.")
+    qa_ss.add_argument(
+        "--out-dir", default=None, type=Path,
+        help="Output directory for screenshots (default: <bundle-dir>/pending_screenshots).",
+    )
+
+    qa_ab = qa_sub.add_parser("approve-baseline", help="Promote screenshots to the approved baseline.")
+    qa_ab.add_argument(
+        "--pending-dir", required=True, type=Path,
+        help="Directory containing the PNG screenshots to promote.",
+    )
+    qa_ab.add_argument(
+        "--baseline-dir", default=None, type=Path,
+        help="Baseline directory (default: <data_root>/baselines).",
+    )
+    qa_ab.add_argument("--message", default="", help="Human-readable description of this approval.")
 
     snap = sub.add_parser("snapshot", help="Build a canonical Snapshot bundle.")
     snap.add_argument("from_source", choices=["rts"])
@@ -423,6 +516,14 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ingest_pypsa_usa(args.path, label=args.label)
     if args.cmd == "ingest" and args.source == "queue_feed":
         return cmd_ingest_queue_feed(args.path)
+    if args.cmd == "ingest" and args.source == "afdc":
+        return cmd_ingest_afdc(getattr(args, "api_key", None))
+    if args.cmd == "qa" and args.qa_action == "screenshot":
+        return cmd_qa_screenshot(args.bundle_dir, args.out_dir)
+    if args.cmd == "qa" and args.qa_action == "approve-baseline":
+        from gridagent_data.paths import DATA_ROOT
+        baseline_dir = args.baseline_dir or (DATA_ROOT / "baselines")
+        return cmd_qa_approve_baseline(args.pending_dir, baseline_dir, args.message)
     if args.cmd == "snapshot" and args.from_source == "rts":
         return cmd_snapshot_rts()
     if args.cmd == "dbt":

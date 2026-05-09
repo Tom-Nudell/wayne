@@ -153,3 +153,76 @@ jobs:
 
       - name: Web build
         run: pnpm --filter @wayne/web build
+
+      - name: JS bundle size gate
+        run: pnpm --filter @wayne/web size
+
+  # QA gate: runs all six checks against the RTS-GMLC test fixture bundle.
+  # Visual regression returns 'warn' (not 'fail') in CI because there is no
+  # approved baseline committed to the repo — baselines live on the data
+  # engineer's machine and in R2 (Phase 2). The gate still fails the build
+  # on any check that returns 'fail'.
+  qa-gate:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/data
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.8.17"
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            platform/data/.venv
+          key: uv-data-qa-${{ runner.os }}-${{ hashFiles('platform/data/pyproject.toml') }}
+
+      - name: Install gridagent-data (with qa extra)
+        run: |
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv/bin/python -e '.[qa]'
+
+      - name: Install Playwright browsers
+        run: .venv/bin/playwright install chromium --with-deps
+
+      - name: Build RTS-GMLC test fixture bundle
+        run: |
+          .venv/bin/python -m gridagent_data.cli ingest rts_gmlc
+          .venv/bin/python -m gridagent_data.cli bundle \
+            --warehouse "$GRIDAGENT_DATA_ROOT/warehouse.duckdb" \
+            --out "$GRIDAGENT_DATA_ROOT/bundle/ci_fixture"
+        env:
+          GRIDAGENT_DATA_ROOT: /tmp/wayne_qa_data
+
+      - name: Run QA gate against fixture bundle
+        id: qa_gate
+        run: |
+          .venv/bin/gridagent-qa-gate \
+            --bundle-dir /tmp/wayne_qa_data/bundle/ci_fixture/tiles \
+            --json > /tmp/qa_report.json || true
+          cat /tmp/qa_report.json
+          # Fail the build only on 'fail' status (not 'warn' — visual regression
+          # returns warn in CI because there is no approved baseline here).
+          OVERALL=$(python3 -c "import json,sys; d=json.load(open('/tmp/qa_report.json')); sys.exit(0 if d['overall'] in ('pass','warn','skipped') else 1)")
+        env:
+          GRIDAGENT_DATA_ROOT: /tmp/wayne_qa_data
+
+      - name: Upload QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-gate-report-${{ github.sha }}
+          path: |
+            /tmp/qa_report.json
+            /tmp/wayne_qa_data/bundle/ci_fixture/tiles/pending_screenshots/
+          retention-days: 14
