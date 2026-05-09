@@ -38,12 +38,63 @@ class OverpassRegion:
     description: str = ""
 
 
-# First vertical slice: three ERCOT-adjacent states. Expand as the
-# silver/gold layers absorb OSM features.
+# All 50 US states + DC. OSM's `power=*` and `man_made=pipeline /
+# substance=gas` taggings are the canonical national source for the
+# atlas; HIFLD's electric infrastructure dataset is stale and the
+# brief defers to OSM for both. Per-region querying keeps each
+# Overpass call within the 1024 MB / 180 s caps.
 REGIONS: tuple[OverpassRegion, ...] = (
-    OverpassRegion(name="us_tx", area="US-TX", description="Texas (ERCOT footprint)."),
-    OverpassRegion(name="us_ca", area="US-CA", description="California (CAISO footprint)."),
-    OverpassRegion(name="us_ny", area="US-NY", description="New York (NYISO footprint)."),
+    OverpassRegion(name="us_al", area="US-AL", description="Alabama"),
+    OverpassRegion(name="us_ak", area="US-AK", description="Alaska"),
+    OverpassRegion(name="us_az", area="US-AZ", description="Arizona"),
+    OverpassRegion(name="us_ar", area="US-AR", description="Arkansas"),
+    OverpassRegion(name="us_ca", area="US-CA", description="California (CAISO footprint)"),
+    OverpassRegion(name="us_co", area="US-CO", description="Colorado"),
+    OverpassRegion(name="us_ct", area="US-CT", description="Connecticut"),
+    OverpassRegion(name="us_dc", area="US-DC", description="District of Columbia"),
+    OverpassRegion(name="us_de", area="US-DE", description="Delaware"),
+    OverpassRegion(name="us_fl", area="US-FL", description="Florida"),
+    OverpassRegion(name="us_ga", area="US-GA", description="Georgia"),
+    OverpassRegion(name="us_hi", area="US-HI", description="Hawaii"),
+    OverpassRegion(name="us_id", area="US-ID", description="Idaho"),
+    OverpassRegion(name="us_il", area="US-IL", description="Illinois"),
+    OverpassRegion(name="us_in", area="US-IN", description="Indiana"),
+    OverpassRegion(name="us_ia", area="US-IA", description="Iowa"),
+    OverpassRegion(name="us_ks", area="US-KS", description="Kansas"),
+    OverpassRegion(name="us_ky", area="US-KY", description="Kentucky"),
+    OverpassRegion(name="us_la", area="US-LA", description="Louisiana"),
+    OverpassRegion(name="us_me", area="US-ME", description="Maine"),
+    OverpassRegion(name="us_md", area="US-MD", description="Maryland"),
+    OverpassRegion(name="us_ma", area="US-MA", description="Massachusetts"),
+    OverpassRegion(name="us_mi", area="US-MI", description="Michigan"),
+    OverpassRegion(name="us_mn", area="US-MN", description="Minnesota"),
+    OverpassRegion(name="us_ms", area="US-MS", description="Mississippi"),
+    OverpassRegion(name="us_mo", area="US-MO", description="Missouri"),
+    OverpassRegion(name="us_mt", area="US-MT", description="Montana"),
+    OverpassRegion(name="us_ne", area="US-NE", description="Nebraska"),
+    OverpassRegion(name="us_nv", area="US-NV", description="Nevada"),
+    OverpassRegion(name="us_nh", area="US-NH", description="New Hampshire"),
+    OverpassRegion(name="us_nj", area="US-NJ", description="New Jersey"),
+    OverpassRegion(name="us_nm", area="US-NM", description="New Mexico"),
+    OverpassRegion(name="us_ny", area="US-NY", description="New York (NYISO footprint)"),
+    OverpassRegion(name="us_nc", area="US-NC", description="North Carolina"),
+    OverpassRegion(name="us_nd", area="US-ND", description="North Dakota"),
+    OverpassRegion(name="us_oh", area="US-OH", description="Ohio"),
+    OverpassRegion(name="us_ok", area="US-OK", description="Oklahoma"),
+    OverpassRegion(name="us_or", area="US-OR", description="Oregon"),
+    OverpassRegion(name="us_pa", area="US-PA", description="Pennsylvania"),
+    OverpassRegion(name="us_ri", area="US-RI", description="Rhode Island"),
+    OverpassRegion(name="us_sc", area="US-SC", description="South Carolina"),
+    OverpassRegion(name="us_sd", area="US-SD", description="South Dakota"),
+    OverpassRegion(name="us_tn", area="US-TN", description="Tennessee"),
+    OverpassRegion(name="us_tx", area="US-TX", description="Texas (ERCOT footprint)"),
+    OverpassRegion(name="us_ut", area="US-UT", description="Utah"),
+    OverpassRegion(name="us_vt", area="US-VT", description="Vermont"),
+    OverpassRegion(name="us_va", area="US-VA", description="Virginia"),
+    OverpassRegion(name="us_wa", area="US-WA", description="Washington"),
+    OverpassRegion(name="us_wv", area="US-WV", description="West Virginia"),
+    OverpassRegion(name="us_wi", area="US-WI", description="Wisconsin"),
+    OverpassRegion(name="us_wy", area="US-WY", description="Wyoming"),
 )
 
 _DEFAULT_ENDPOINT = "https://overpass-api.de/api/interpreter"
@@ -78,6 +129,51 @@ def _query_for(region: OverpassRegion) -> str:
     return _QUERY_TEMPLATE.format(iso=region.area)
 
 
+def _write_parquet(target_dir: "_paths.Path", region: str, json_path: "_paths.Path") -> None:
+    """Convert one state's bronze JSON to a sibling ``elements.parquet``.
+
+    The dbt silver layer reads the parquet, not the JSON — parsing 3 GB
+    of bronze JSON per dbt run OOMs on a 32 GB box. Per-state parquet
+    pre-conversion keeps memory bounded (each call uses ~6 GB peak)
+    and is dramatically faster on subsequent reads. The original JSON
+    stays on disk as the immutable bronze artifact.
+    """
+    try:
+        import duckdb
+    except ImportError:  # pragma: no cover — duckdb is a hard dep of platform/data.
+        return
+
+    parquet_path = target_dir / "elements.parquet"
+    con = duckdb.connect(":memory:")
+    try:
+        # 16 GB peak handles California (549 MB JSON, the biggest state).
+        # Tune via OSM_PARQUET_MEMORY_LIMIT for low-RAM envs.
+        con.execute(
+            f"SET memory_limit='{os.environ.get('OSM_PARQUET_MEMORY_LIMIT', '16GB')}'"
+        )
+        con.execute("SET preserve_insertion_order=false")
+        con.execute(
+            f"""
+            COPY (
+                select
+                    '{region}' as region,
+                    src.filename as source_file,
+                    u.unnest as element
+                from read_json_auto(
+                    '{json_path}',
+                    maximum_object_size = 1073741824,
+                    filename = true
+                ) src,
+                unnest(src.elements) u
+            )
+            TO '{parquet_path}'
+            (FORMAT PARQUET, COMPRESSION ZSTD)
+            """
+        )
+    finally:
+        con.close()
+
+
 def fetch_region(
     region: OverpassRegion,
     *,
@@ -98,8 +194,13 @@ def fetch_region(
     query = _query_for(region)
 
     own_client = client is None
+    # Overpass main rejects requests with httpx's default User-Agent
+    # (returns 406 Not Acceptable). Identify ourselves explicitly per
+    # OSM API etiquette.
     client = client or httpx.Client(
-        timeout=httpx.Timeout(30.0, read=900.0), follow_redirects=True
+        timeout=httpx.Timeout(30.0, read=900.0),
+        follow_redirects=True,
+        headers={"User-Agent": "wayne-gridagent/0.1 (+https://github.com/Tom-Nudell/wayne)"},
     )
 
     delays = (0, 5, 15, 30, 60)
@@ -134,6 +235,7 @@ def fetch_region(
             client.close()
 
     target.write_bytes(payload)
+    _write_parquet(target_dir, region.name, target)
 
     # Summarise counts without re-parsing for downstream asset metadata.
     try:

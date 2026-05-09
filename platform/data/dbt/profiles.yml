@@ -3,11 +3,19 @@ gridagent_data:
   outputs:
     dev:
       type: duckdb
-      # Resolved at runtime to ``$GRIDAGENT_DATA_ROOT/warehouse.duckdb`` (or the
-      # default under ``../data_root/`` when the env var is unset). Override per
-      # environment with ``DBT_DUCKDB_PATH``.
-      path: "{{ env_var('DBT_DUCKDB_PATH', '../data_root/warehouse.duckdb') }}"
+      # dbt runs with CWD=platform/data/dbt (the project dir). The relative
+      # path here resolves to wayne/data_root/. Override with
+      # ``DBT_DUCKDB_PATH`` (or ``GRIDAGENT_DATA_ROOT`` if you also want
+      # bronze/silver paths to follow).
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../../../data_root/warehouse.duckdb') }}"
       threads: 4
+      # Tuning for the gold_atlas build, which reads ~3 GB of OSM JSON
+      # across 51 state extracts. Without insertion-order preservation
+      # DuckDB streams the union/unnest pipeline instead of materialising
+      # the full intermediate result.
+      settings:
+        preserve_insertion_order: false
+        memory_limit: '24GB'
       # DuckDB ships parquet + CSV readers in the core binary; no extension
       # install is needed for our silver/gold models. The ``spatial``
       # extension is loaded on demand by the tile exporter
