@@ -1,0 +1,13 @@
+{
+  "generated_at": "2026-05-09T23:43:07+00:00",
+  "total_features": 15170,
+  "single_source": 15170,
+  "multi_source": 0,
+  "no_source": 0,
+  "source_breakdown": [
+    {
+      "sources": "pudl",
+      "count": 15170
+    }
+  ]
+}

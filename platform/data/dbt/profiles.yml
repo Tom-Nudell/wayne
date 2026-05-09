@@ -3,11 +3,10 @@ gridagent_data:
   outputs:
     dev:
       type: duckdb
-      # dbt runs with CWD=platform/data/dbt (the project dir). The relative
-      # path here resolves to wayne/data_root/. Override with
-      # ``DBT_DUCKDB_PATH`` (or ``GRIDAGENT_DATA_ROOT`` if you also want
-      # bronze/silver paths to follow).
-      path: "{{ env_var('DBT_DUCKDB_PATH', '../../../data_root/warehouse.duckdb') }}"
+      # dbt is invoked with CWD=platform/data/. The relative path here
+      # resolves to platform/data_root/. Override with ``DBT_DUCKDB_PATH``
+      # (or ``GRIDAGENT_DATA_ROOT`` if you also want bronze/silver paths).
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data_root/warehouse.duckdb') }}"
       threads: 4
       # Tuning for the gold_atlas build, which reads ~3 GB of OSM JSON
       # across 51 state extracts. Without insertion-order preservation

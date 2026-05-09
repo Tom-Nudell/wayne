@@ -1,0 +1,17 @@
+{
+  "version": "2026-05-09",
+  "generated_at": "2026-05-09T23:43:07+00:00",
+  "approved": false,
+  "layers": [
+    {
+      "name": "plants",
+      "kind": "plant",
+      "pmtiles": "plants.pmtiles",
+      "feature_count": 15170,
+      "license_spdx": [
+        "CC-BY-4.0"
+      ],
+      "attribution_required": true
+    }
+  ]
+}
