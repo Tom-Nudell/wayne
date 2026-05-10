@@ -226,3 +226,33 @@ jobs:
             /tmp/qa_report.json
             /tmp/wayne_qa_data/bundle/ci_fixture/tiles/pending_screenshots/
           retention-days: 14
+
+  # Lighthouse CI: LCP < 1.5s and FCP < 800ms on the marketing landing page.
+  # The map route is excluded because it depends on external tile CDN timing;
+  # map-specific paint budget is verified manually against production infra.
+  lighthouse:
+    if: "!contains(github.event.head_commit.message, 'skip_ci')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "10.33.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web app
+        run: pnpm --filter @wayne/web build
+
+      - name: Run Lighthouse CI
+        run: |
+          pnpm dlx @lhci/cli@0.14 autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

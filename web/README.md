@@ -7,9 +7,17 @@ SvelteKit app — Wayne's commercial US energy infrastructure map. Marketing, cu
 ```bash
 # from repo root
 pnpm install
+
+# Symlink platform/data's existing PMTiles bundle into web/static/tiles/
+# so the dev server serves them at /tiles/*.pmtiles. One-time setup;
+# rerun whenever the bundle is regenerated.
+pnpm --filter @wayne/web link-tiles
+
 pnpm dev
 # → http://localhost:5173
 ```
+
+In production the same `/tiles/*` URLs route through the Cloudflare Worker (see brief §4) which validates the JWT and Range-fetches from R2. Local dev bypasses the worker — free tiles are public and signed-tier work hasn't shipped.
 
 ## Routes
 

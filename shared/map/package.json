@@ -14,7 +14,8 @@
     "src"
   ],
   "dependencies": {
-    "@wayne/schema": "workspace:*"
+    "@wayne/schema": "workspace:*",
+    "protomaps-themes-base": "^4.3.0"
   },
   "peerDependencies": {
     "maplibre-gl": "^4.5.0"
