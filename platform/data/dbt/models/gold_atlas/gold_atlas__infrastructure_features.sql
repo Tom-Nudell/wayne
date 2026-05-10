@@ -5,8 +5,8 @@
 -- ``kind`` values rather than new tables. Geometry is WKT here; the parquet
 -- exporter promotes it to GeoArrow for tippecanoe.
 --
--- Top-level fields (voltage_kv, capacity_mw, fuel) are normalized across
--- sources so the MapLibre paint specs find them via ["get", "voltage_kv"]
+-- Top-level fields (voltage_kv, capacity_mw, fuel, synthetic) are normalized
+-- across sources so the MapLibre paint specs find them via ["get", "voltage_kv"]
 -- without having to dig into a JSON properties blob. Source-specific
 -- attributes still live in ``properties`` (JSON) for popovers.
 --
@@ -20,6 +20,10 @@
 --   * PUDL plants without geometry are emitted with NULL geometry_wkt and
 --     are dropped by the tile exporter; the silver model needs the
 --     ``core_eia__entity_plants`` lat/lon ingest before they show up.
+--
+-- synthetic=true marks features from research test systems (RTS-GMLC etc.)
+-- that are present for internal tooling but are not real US infrastructure.
+-- The atlas frontend hides them by default; the toggle reveals them.
 
 {% set fuel_normalize %}
 case lower(coalesce({fuel_in}, ''))
@@ -59,12 +63,6 @@ case lower(coalesce({fuel_in}, ''))
 end
 {% endset %}
 
--- RTS-GMLC (the synthetic 73-bus research test system) is intentionally
--- excluded from this mart. The agent platform (platform/orchestrator) still
--- uses it for studies, but the customer-facing map renders only real US
--- infrastructure. To re-enable for an internal viewer, add a feature flag
--- on the ``gold_network__buses`` source filter.
---
 -- PUDL plants are aggregated generator rollups grouped by plant_id_eia.
 -- Today they have NULL geometry (the silver model does not yet pull
 -- ``core_eia__entity_plants`` lat/lon). The tile exporter drops features
@@ -99,7 +97,8 @@ with pudl_plants as (
             else null
         end as geometry_wkt,
         any_value(g.sources) as sources,
-        any_value(g.licenses) as licenses
+        any_value(g.licenses) as licenses,
+        false as synthetic
     from {{ ref('gold_network__generators') }} g
     left join {{ ref('silver_pudl__eia860_plants') }} p
         on g.plant_id_eia = p.plant_id_eia
@@ -164,7 +163,8 @@ osm_substations_final as (
         cast(null as varchar) as fuel,
         geometry_wkt,
         sources,
-        licenses
+        licenses,
+        false as synthetic
     from osm_substations
 ),
 
@@ -229,7 +229,8 @@ osm_plants_final as (
         {{ fuel_normalize | replace('{fuel_in}', 'fuel_in') }} as fuel,
         geometry_wkt,
         sources,
-        licenses
+        licenses,
+        false as synthetic
     from osm_plants
 ),
 
@@ -277,7 +278,8 @@ osm_transmission_lines_final as (
         cast(null as varchar) as fuel,
         geometry_wkt,
         sources,
-        licenses
+        licenses,
+        false as synthetic
     from osm_transmission_lines
     where voltage_kv_calc is not null and voltage_kv_calc >= 60
 ),
@@ -300,7 +302,8 @@ osm_gas_pipelines as (
         cast(null as varchar) as fuel,
         'LINESTRING(' || coord_list || ')' as geometry_wkt,
         ['osm'] as sources,
-        ['ODbL-1.0'] as licenses
+        ['ODbL-1.0'] as licenses,
+        false as synthetic
     from osm_linestrings
     where coalesce(tags['man_made'], '') = 'pipeline'
       and lower(coalesce(tags['substance'], '')) = 'gas'
@@ -331,7 +334,8 @@ queue_projects as (
             else null
         end as geometry_wkt,
         [coalesce(q.source, 'queue_feed')] as sources,
-        [coalesce(q.license, 'unknown')] as licenses
+        [coalesce(q.license, 'unknown')] as licenses,
+        false as synthetic
     from {{ ref('gold_market__queue_snapshot') }} q
     -- Drop withdrawn/completed historical entries and rows with zero metadata.
     where lower(coalesce(q.queue_status, '')) in (
@@ -341,6 +345,128 @@ queue_projects as (
         'ia signed', 'interconnection agreement signed', 'operational'
     )
       and (q.fuel_type is not null or q.capacity_mw is not null)
+),
+
+-- ---------------------------------------------------------------------------
+-- RTS-GMLC synthetic grid (73-bus NREL research test system, geographically
+-- placed in Southern California / Mojave Desert for visualization purposes).
+-- synthetic=true lets the atlas frontend toggle these off for real-data-only
+-- views while keeping them visible for internal power-flow studies.
+-- ---------------------------------------------------------------------------
+rts_buses as (
+    select * from {{ ref('silver_rts_gmlc__buses') }}
+),
+
+-- Each bus becomes a substation point. base_kv drives the voltage color ramp.
+rts_substations as (
+    select
+        'substation:rts_gmlc:' || bus_id as feature_id,
+        'substation' as kind,
+        coalesce(name, 'RTS bus ' || bus_id) as display_name,
+        json_object(
+            'bus_id', bus_id,
+            'base_kv', base_kv,
+            'bus_type', bus_type,
+            'area', area,
+            'zone', zone,
+            'synthetic', true
+        ) as properties,
+        base_kv as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        'POINT(' || cast(longitude as varchar) || ' ' || cast(latitude as varchar) || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_buses
+    where latitude is not null and longitude is not null
+),
+
+-- Join generators to bus coordinates; each generator becomes a plant point.
+rts_generators_geo as (
+    select
+        g.generator_id,
+        g.bus_id,
+        g.p_max_mw,
+        g.fuel,
+        g.unit_type,
+        g.category,
+        b.latitude,
+        b.longitude
+    from {{ ref('silver_rts_gmlc__generators') }} g
+    join rts_buses b on g.bus_id = b.bus_id
+    where b.latitude is not null and b.longitude is not null
+),
+
+rts_plants as (
+    select
+        'plant:rts_gmlc:' || generator_id as feature_id,
+        'plant' as kind,
+        generator_id as display_name,
+        json_object(
+            'generator_id', generator_id,
+            'bus_id', bus_id,
+            'capacity_mw', p_max_mw,
+            'fuel', fuel,
+            'unit_type', unit_type,
+            'category', category,
+            'synthetic', true
+        ) as properties,
+        cast(null as double) as voltage_kv,
+        p_max_mw as capacity_mw,
+        {{ fuel_normalize | replace('{fuel_in}', 'fuel') }} as fuel,
+        'POINT(' || cast(longitude as varchar) || ' ' || cast(latitude as varchar) || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_generators_geo
+),
+
+-- Join branches to from/to bus coordinates for LineString geometry.
+-- base_kv from the from-bus drives the voltage color ramp.
+rts_branches_geo as (
+    select
+        br.branch_id,
+        br.from_bus_id,
+        br.to_bus_id,
+        br.rating_a_mva,
+        bf.base_kv,
+        bf.latitude  as from_lat,
+        bf.longitude as from_lon,
+        bt.latitude  as to_lat,
+        bt.longitude as to_lon
+    from {{ ref('silver_rts_gmlc__branches') }} br
+    join rts_buses bf on br.from_bus_id = bf.bus_id
+    join rts_buses bt on br.to_bus_id   = bt.bus_id
+    where bf.latitude is not null and bf.longitude is not null
+      and bt.latitude is not null and bt.longitude is not null
+),
+
+rts_transmission_lines as (
+    select
+        'transmission_line:rts_gmlc:' || branch_id as feature_id,
+        'transmission_line' as kind,
+        'RTS branch ' || branch_id as display_name,
+        json_object(
+            'branch_id', branch_id,
+            'from_bus', from_bus_id,
+            'to_bus', to_bus_id,
+            'rating_mva', rating_a_mva,
+            'base_kv', base_kv,
+            'synthetic', true
+        ) as properties,
+        base_kv as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        'LINESTRING('
+            || cast(from_lon as varchar) || ' ' || cast(from_lat as varchar)
+            || ', '
+            || cast(to_lon as varchar) || ' ' || cast(to_lat as varchar)
+            || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_branches_geo
 )
 
 select * from pudl_plants
@@ -354,3 +480,9 @@ union all by name
 select * from osm_gas_pipelines
 union all by name
 select * from queue_projects
+union all by name
+select * from rts_substations
+union all by name
+select * from rts_plants
+union all by name
+select * from rts_transmission_lines

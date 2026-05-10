@@ -59,13 +59,12 @@ def run_episode(
         episode.finish(summary=f"Aborted: {exc}")
 
     if atlas_overlay_dir is not None:
-        from .overlay_export import write_n1_overlay_from_episode
+        from .overlay_export import write_episode_overlays
 
-        out = atlas_overlay_dir / f"episode_{episode.episode_id}_overlay.geojson"
         try:
-            n = write_n1_overlay_from_episode(episode.log_path, out)
-            rel = f"overlays/{out.name}"
-            print(f"Atlas overlay: {n} features → {out} (open atlas with ?overlay={rel})")
+            n, ep_id = write_episode_overlays(episode.log_path, atlas_overlay_dir)
+            ep_dir = atlas_overlay_dir / ep_id
+            print(f"Atlas overlay: {n} features → {ep_dir}/  (open atlas with ?episode={ep_id})")
         except (ValueError, FileNotFoundError) as exc:
             print(f"Atlas overlay skipped: {exc}", flush=True)
 

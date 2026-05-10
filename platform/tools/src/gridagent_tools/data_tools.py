@@ -21,12 +21,18 @@ def _resolve_snapshot(snapshot_id: str | None) -> Snapshot:
     root = _bundle_root()
     if snapshot_id:
         return Snapshot.at(root / snapshot_id)
+    # Only consider directories that actually contain parquet files — tile-bundle
+    # directories (e.g. snapshot_latest) share the snapshot_ prefix but hold
+    # bundle.duckdb + tiles/ instead of buses.parquet, and must be skipped.
     candidates = sorted(
-        (p for p in root.iterdir() if p.is_dir() and p.name.startswith("snapshot_")),
+        (
+            p for p in root.iterdir()
+            if p.is_dir() and p.name.startswith("snapshot_") and (p / "buses.parquet").exists()
+        ),
         reverse=True,
     )
     if not candidates:
-        raise FileNotFoundError(f"No snapshots in {root}.")
+        raise FileNotFoundError(f"No parquet snapshots in {root}.")
     return Snapshot.at(candidates[0])
 
 
@@ -40,7 +46,10 @@ def list_data_snapshots() -> ToolResult:
     snapshots: list[dict] = []
     if root.exists():
         for p in sorted(
-            (p for p in root.iterdir() if p.is_dir() and p.name.startswith("snapshot_")),
+            (
+                p for p in root.iterdir()
+                if p.is_dir() and p.name.startswith("snapshot_") and (p / "buses.parquet").exists()
+            ),
             reverse=True,
         ):
             counts = None

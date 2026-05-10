@@ -87,7 +87,8 @@ def _write_geojson(
             properties,
             sources,
             licenses,
-            geometry_wkt
+            geometry_wkt,
+            synthetic
         FROM src."{warehouse_schema}"."{warehouse_table}"
         WHERE kind = ?
           AND geometry_wkt IS NOT NULL
@@ -96,7 +97,7 @@ def _write_geojson(
     ).fetchall()
 
     features = []
-    for feature_id, display_name, properties, sources, licenses, wkt in rows:
+    for feature_id, display_name, properties, sources, licenses, wkt, synthetic in rows:
         # DuckDB gives us WKT; convert to GeoJSON via the spatial extension
         # if the caller loaded it, else via a literal WKT→JSON shim. We keep
         # this in Python because the frontend already knows how to parse
@@ -114,6 +115,7 @@ def _write_geojson(
             "kind": kind,
             "sources": list(sources) if sources else [],
             "licenses": list(licenses) if licenses else [],
+            "synthetic": bool(synthetic),
         })
         features.append({"type": "Feature", "geometry": geometry, "properties": props})
 

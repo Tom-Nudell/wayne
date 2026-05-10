@@ -34,6 +34,19 @@
         box-shadow: 0 1px 0 rgba(28, 24, 18, 0.06);
       }
       #panel strong { font-weight: 600; letter-spacing: 0.04em; text-transform: lowercase; }
+      #synthetic-toggle {
+        position: absolute; bottom: 14px; left: 14px; z-index: 10;
+        background: rgba(243, 237, 224, 0.92);
+        color: var(--loam-900);
+        padding: 8px 12px;
+        border: 1px solid var(--loam-500);
+        border-radius: 2px;
+        font-size: 12px;
+        box-shadow: 0 1px 0 rgba(28, 24, 18, 0.06);
+        cursor: pointer;
+        user-select: none;
+      }
+      #synthetic-toggle label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
       .myc-popup .maplibregl-popup-content {
         background: var(--bone);
         color: var(--loam-900);
@@ -45,6 +58,12 @@
   </head>
   <body>
     <div id="map"></div>
+    <div id="synthetic-toggle">
+      <label>
+        <input type="checkbox" id="show-synthetic" checked />
+        show synthetic (rts-gmlc)
+      </label>
+    </div>
     <div id="panel">
       <strong>gridagent · atlas</strong><br />
       <em>a living network</em><br />

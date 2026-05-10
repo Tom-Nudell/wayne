@@ -31,6 +31,7 @@ export interface GridFeatureProperties {
   readonly name?: string | null;
   readonly sources: readonly string[];
   readonly licenses: readonly string[];
+  readonly synthetic?: boolean;
 }
 
 export interface ManifestLayer {
