@@ -37,7 +37,7 @@ export interface LayerAttribution {
 function tileDir(): string {
   if (process.env.WAYNE_TILE_DIR) return process.env.WAYNE_TILE_DIR;
   // Resolve from the web package root (two levels up from src/routes/attribution)
-  return join(new URL(import.meta.url).pathname, '../../../../../static/tiles');
+  return join(new URL(import.meta.url).pathname, '../../../../static/tiles');
 }
 
 export const load: PageServerLoad = async () => {
