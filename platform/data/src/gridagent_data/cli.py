@@ -272,6 +272,21 @@ def cmd_bundle(
         print(f"  · {r.kind}: {r.feature_count} features → {suffix}")
 
     if atlas_public is not None:
+        atlas_public = atlas_public.resolve()
+        tile_dir_resolved = tile_dir.resolve()
+        try:
+            atlas_public.relative_to(tile_dir_resolved)
+            # atlas_public is inside tile_dir — almost certainly a mistake
+            # (e.g. --atlas-public passed the tiles symlink instead of atlas/public/)
+            print(
+                f"error: --atlas-public ({atlas_public}) is inside the tile output "
+                f"directory ({tile_dir_resolved}).\n"
+                f"Pass the Vite public/ directory instead, e.g. platform/atlas/public/",
+                file=sys.stderr,
+            )
+            return 2
+        except ValueError:
+            pass  # not a subdirectory — fine
         atlas_public.mkdir(parents=True, exist_ok=True)
         to_duckdb.copy_to_atlas_public(bundle_path, atlas_public)
         # Mirror tiles alongside the bundle so the atlas's ``VITE_TILE_BASE=/tiles``
