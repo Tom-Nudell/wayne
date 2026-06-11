@@ -10,21 +10,27 @@
 
 <main>
   <h1>Terms of Service</h1>
-  <p class="meta">Last updated: {new Date(LAST_UPDATED).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  <p class="meta">
+    Last updated: {new Date(LAST_UPDATED).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })}
+  </p>
 
   <section>
     <h2>Acceptance</h2>
     <p>
-      By accessing or using {BRAND.productName ?? BRAND.internal} ("the Service") you agree to
-      these Terms. If you do not agree, do not use the Service.
+      By accessing or using {BRAND.productName ?? BRAND.internal} ("the Service") you agree to these Terms.
+      If you do not agree, do not use the Service.
     </p>
   </section>
 
   <section>
     <h2>Description of service</h2>
     <p>
-      The Service provides an interactive map of publicly sourced US energy infrastructure
-      data for general information and exploration purposes.
+      The Service provides an interactive map of publicly sourced US energy infrastructure data for
+      general information and exploration purposes.
     </p>
   </section>
 
@@ -32,28 +38,31 @@
     <h2>Not for operational use — important disclaimer</h2>
     <p>
       <strong>
-        The Service must not be used as the basis for engineering decisions, grid operations,
-        power system planning, financial transactions, real estate decisions, emergency response,
-        or any other decision where accuracy is safety-critical or legally material.
+        The Service must not be used as the basis for engineering decisions, grid operations, power
+        system planning, financial transactions, real estate decisions, emergency response, or any
+        other decision where accuracy is safety-critical or legally material.
       </strong>
     </p>
     <p>
-      Data may be incomplete, outdated, geographically misplaced, or otherwise inaccurate.
-      Always consult authoritative primary sources and qualified professionals.
+      Data may be incomplete, outdated, geographically misplaced, or otherwise inaccurate. Always
+      consult authoritative primary sources and qualified professionals.
     </p>
   </section>
 
   <section>
     <h2>Permitted use</h2>
     <p>
-      You may use the Service for personal exploration, research, journalism, and internal
-      business purposes consistent with these Terms. You may not:
+      You may use the Service for personal exploration, research, journalism, and internal business
+      purposes consistent with these Terms. You may not:
     </p>
     <ul>
       <li>Scrape or systematically extract the Service's data at scale.</li>
       <li>Use the Service to build a competing product without a commercial license.</li>
-      <li>Re-publish raw data exports in violation of the original source licenses
-          (see the <a href="/attribution">attribution page</a>).</li>
+      <li>
+        Re-publish raw data exports in violation of the original source licenses (see the <a
+          href="/attribution">attribution page</a
+        >).
+      </li>
       <li>Attempt to circumvent tier gating or access controls.</li>
     </ul>
   </section>
@@ -61,48 +70,44 @@
   <section>
     <h2>Data attribution</h2>
     <p>
-      Some data sources require attribution when their data is reproduced. If you publish
-      outputs derived from the Service (screenshots, reports, exports), you must include
-      the attributions listed on the <a href="/attribution">attribution page</a> for any
-      layer you used. ODbL-licensed layers (OSM-derived) may not be exported as raw
-      GeoJSON without a commercial license.
+      Some data sources require attribution when their data is reproduced. If you publish outputs
+      derived from the Service (screenshots, reports, exports), you must include the attributions
+      listed on the <a href="/attribution">attribution page</a> for any layer you used. ODbL-licensed
+      layers (OSM-derived) may not be exported as raw GeoJSON without a commercial license.
     </p>
   </section>
 
   <section>
     <h2>Accounts and billing</h2>
     <p>
-      Pro tier subscriptions are billed monthly or annually via Stripe. You may cancel at
-      any time; access continues until the end of the billing period. Refunds are at our
-      discretion for annual plans cancelled within 14 days.
+      Pro tier subscriptions are billed monthly or annually via Stripe. You may cancel at any time;
+      access continues until the end of the billing period. Refunds are at our discretion for annual
+      plans cancelled within 14 days.
     </p>
   </section>
 
   <section>
     <h2>Disclaimer of warranties</h2>
     <p>
-      THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
-      WE DO NOT WARRANT ACCURACY, COMPLETENESS, TIMELINESS, OR FITNESS FOR ANY PARTICULAR
-      PURPOSE.
+      THE SERVICE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. WE DO NOT
+      WARRANT ACCURACY, COMPLETENESS, TIMELINESS, OR FITNESS FOR ANY PARTICULAR PURPOSE.
     </p>
   </section>
 
   <section>
     <h2>Limitation of liability</h2>
     <p>
-      TO THE MAXIMUM EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ANY CLAIM ARISING
-      FROM USE OF THE SERVICE IS LIMITED TO THE AMOUNT YOU PAID US IN THE 12 MONTHS
-      PRECEDING THE CLAIM. WE ARE NOT LIABLE FOR INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
-      DAMAGES.
+      TO THE MAXIMUM EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY FOR ANY CLAIM ARISING FROM USE OF
+      THE SERVICE IS LIMITED TO THE AMOUNT YOU PAID US IN THE 12 MONTHS PRECEDING THE CLAIM. WE ARE
+      NOT LIABLE FOR INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES.
     </p>
   </section>
 
   <section>
     <h2>Changes to terms</h2>
     <p>
-      We may update these Terms. Material changes will be announced by email to registered
-      users with at least 14 days notice. Continued use after the effective date constitutes
-      acceptance.
+      We may update these Terms. Material changes will be announced by email to registered users
+      with at least 14 days notice. Continued use after the effective date constitutes acceptance.
     </p>
   </section>
 
@@ -143,7 +148,8 @@
     color: #3a2e24;
   }
 
-  p, ul {
+  p,
+  ul {
     color: #4a3f35;
     margin: 0 0 0.75rem;
   }

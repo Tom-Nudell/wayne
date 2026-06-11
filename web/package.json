@@ -11,12 +11,17 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "size": "size-limit",
+    "lint": "prettier --check . && eslint .",
+    "format": "prettier --write .",
     "link-tiles": "bash scripts/link-tiles.sh"
   },
   "size-limit": [
     {
-      "name": "entry + shared chunks (gzipped)",
-      "path": ".svelte-kit/output/client/_app/immutable/entry/*.js",
+      "name": "initial JS (entry + shared chunks)",
+      "path": [
+        ".svelte-kit/output/client/_app/immutable/entry/*.js",
+        ".svelte-kit/output/client/_app/immutable/chunks/*.js"
+      ],
       "limit": "250 KB"
     }
   ],
@@ -29,15 +34,24 @@
     "pmtiles": "^3.2.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@size-limit/preset-app": "^11.1.0",
     "@sveltejs/adapter-vercel": "^5.5.0",
-    "@types/node": "^20.16.0",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
-    "@size-limit/preset-app": "^11.0.0",
-    "size-limit": "^11.0.0",
+    "@types/node": "^20.16.0",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-svelte": "^2.46.0",
+    "globals": "^15.11.0",
+    "prettier": "^3.3.0",
+    "prettier-plugin-svelte": "^3.2.0",
+    "size-limit": "^11.1.0",
     "svelte": "^5.1.0",
     "svelte-check": "^4.0.0",
+    "svelte-eslint-parser": "^0.43.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.12.0",
     "vite": "^5.4.0"
   }
 }

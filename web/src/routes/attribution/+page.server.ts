@@ -41,7 +41,7 @@ function tileDir(): string {
 }
 
 export const load: PageServerLoad = async () => {
-  let layers: LayerAttribution[] = [];
+  const layers: LayerAttribution[] = [];
   let dataAvailable = false;
 
   try {
