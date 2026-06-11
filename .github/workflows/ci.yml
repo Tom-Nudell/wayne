@@ -145,6 +145,9 @@ jobs:
       - name: Install workspace
         run: pnpm install --frozen-lockfile
 
+      - name: Web lint (prettier + eslint)
+        run: pnpm --filter @wayne/web lint
+
       - name: Web typecheck
         run: pnpm --filter @wayne/web check
 
@@ -154,7 +157,7 @@ jobs:
       - name: Web build
         run: pnpm --filter @wayne/web build
 
-      - name: JS bundle size gate
+      - name: Web bundle budget (size-limit, brief §9)
         run: pnpm --filter @wayne/web size
 
   # QA gate: runs all six checks against the RTS-GMLC test fixture bundle.

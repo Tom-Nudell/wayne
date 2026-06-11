@@ -11,7 +11,13 @@
 
 <main>
   <h1>Privacy Policy</h1>
-  <p class="meta">Last updated: {new Date(LAST_UPDATED).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  <p class="meta">
+    Last updated: {new Date(LAST_UPDATED).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })}
+  </p>
 
   <section>
     <h2>Summary</h2>
@@ -24,40 +30,47 @@
   <section>
     <h2>Information we collect</h2>
     <ul>
-      <li><strong>Account data</strong> — email address and name when you create an account (Pro tier only).</li>
-      <li><strong>Usage data</strong> — pages visited, map interactions, feature toggles. Collected in aggregate via Vercel Web Analytics (first-party, no cross-site tracking).</li>
-      <li><strong>Error data</strong> — browser errors and performance traces collected via Sentry to help us fix bugs. Session Replay is enabled for Pro users only, with form fields redacted.</li>
-      <li><strong>Payment data</strong> — handled entirely by Stripe. We never see or store full card numbers.</li>
+      <li>
+        <strong>Account data</strong> — email address and name when you create an account (Pro tier only).
+      </li>
+      <li>
+        <strong>Usage data</strong> — pages visited, map interactions, feature toggles. Collected in aggregate
+        via Vercel Web Analytics (first-party, no cross-site tracking).
+      </li>
+      <li>
+        <strong>Error data</strong> — browser errors and performance traces collected via Sentry to help
+        us fix bugs. Session Replay is enabled for Pro users only, with form fields redacted.
+      </li>
+      <li>
+        <strong>Payment data</strong> — handled entirely by Stripe. We never see or store full card numbers.
+      </li>
     </ul>
   </section>
 
   <section>
     <h2>Cookies</h2>
     <p>
-      We use cookies only for authentication session management (Clerk). We do not use
-      advertising cookies. No cookie consent banner is required because we run no
-      third-party marketing pixels.
+      We use cookies only for authentication session management (Clerk). We do not use advertising
+      cookies. No cookie consent banner is required because we run no third-party marketing pixels.
     </p>
   </section>
 
   <section>
     <h2>Data sharing</h2>
     <p>
-      We share data only with the sub-processors required to operate the service:
-      Vercel (hosting), Clerk (auth), Stripe (billing), Cloudflare (CDN/tiles),
-      Sentry (error monitoring), PostHog (product analytics), Neon (database),
-      Upstash (rate limiting). A full sub-processor list is available on request.
+      We share data only with the sub-processors required to operate the service: Vercel (hosting),
+      Clerk (auth), Stripe (billing), Cloudflare (CDN/tiles), Sentry (error monitoring), PostHog
+      (product analytics), Neon (database), Upstash (rate limiting). A full sub-processor list is
+      available on request.
     </p>
-    <p>
-      We do not sell or rent personal data to third parties.
-    </p>
+    <p>We do not sell or rent personal data to third parties.</p>
   </section>
 
   <section>
     <h2>Data retention</h2>
     <p>
-      Account data is retained for the life of your account plus 90 days after deletion.
-      Usage and error data follows the default retention of each sub-processor (typically 90 days).
+      Account data is retained for the life of your account plus 90 days after deletion. Usage and
+      error data follows the default retention of each sub-processor (typically 90 days).
     </p>
   </section>
 
@@ -65,16 +78,16 @@
     <h2>Your rights</h2>
     <p>
       You may request access to, correction of, or deletion of your personal data at any time.
-      California residents have additional rights under CCPA/CPRA. EU residents have rights
-      under GDPR. To exercise these rights, email us at the address on the contact page.
+      California residents have additional rights under CCPA/CPRA. EU residents have rights under
+      GDPR. To exercise these rights, email us at the address on the contact page.
     </p>
   </section>
 
   <section>
     <h2>Changes to this policy</h2>
     <p>
-      We will update this page when the policy changes and notify registered users by email
-      for material changes.
+      We will update this page when the policy changes and notify registered users by email for
+      material changes.
     </p>
   </section>
 </main>
@@ -107,7 +120,8 @@
     color: #3a2e24;
   }
 
-  p, ul {
+  p,
+  ul {
     color: #4a3f35;
     margin: 0 0 0.75rem;
   }

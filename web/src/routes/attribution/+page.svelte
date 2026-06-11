@@ -12,16 +12,14 @@
 <main>
   <h1>Data Attribution</h1>
   <p class="intro">
-    Every feature on the map is derived from one or more public data sources. This page lists
-    all sources, their licenses, and the attribution required by each license. It is generated
+    Every feature on the map is derived from one or more public data sources. This page lists all
+    sources, their licenses, and the attribution required by each license. It is generated
     automatically from the data pipeline — never hand-edited.
   </p>
 
   {#if !data.dataAvailable}
     <div class="placeholder">
-      <p>
-        Attribution data not yet generated. Run the data pipeline first:
-      </p>
+      <p>Attribution data not yet generated. Run the data pipeline first:</p>
       <pre>gridagent-data bundle</pre>
     </div>
   {:else if data.layers.length === 0}
