@@ -5,109 +5,131 @@
 -- ``kind`` values rather than new tables. Geometry is WKT here; the parquet
 -- exporter promotes it to GeoArrow for tippecanoe.
 --
--- Lessons from OpenGridWorks captured in this schema:
---   * Per-row ``sources`` and ``licenses`` so the atlas popover can attribute
---     correctly without joining back to the mart at request time.
---   * Open-set ``kind`` so we can add gas/fiber/datacenters later without
---     schema migrations.
+-- Top-level fields (voltage_kv, capacity_mw, fuel, synthetic) are normalized
+-- across sources so the MapLibre paint specs find them via ["get", "voltage_kv"]
+-- without having to dig into a JSON properties blob. Source-specific
+-- attributes still live in ``properties`` (JSON) for popovers.
+--
+-- Filtering rationale (brief §7 — data quality is the moat):
+--   * OSM `power=generator` is excluded — those are individual turbines /
+--     rooftop panels and would drown the layer in noise. Keep `power=plant`.
+--   * OSM transmission below 60 kV is dropped — distribution clutter.
+--   * Queue projects must be in an active status AND have at least one of
+--     fuel_type or capacity_mw — sparse "Withdrawn / no metadata" rows do
+--     not earn map real estate.
+--   * PUDL plants without geometry are emitted with NULL geometry_wkt and
+--     are dropped by the tile exporter; the silver model needs the
+--     ``core_eia__entity_plants`` lat/lon ingest before they show up.
+--
+-- synthetic=true marks features from research test systems (RTS-GMLC etc.)
+-- that are present for internal tooling but are not real US infrastructure.
+-- The atlas frontend hides them by default; the toggle reveals them.
 
+{% set fuel_normalize %}
+case lower(coalesce({fuel_in}, ''))
+    when 'solar' then 'solar'
+    when 'sun' then 'solar'
+    when 'pv' then 'solar'
+    when 'photovoltaic' then 'solar'
+    when 'wind' then 'wind'
+    when 'wnd' then 'wind'
+    when 'natural_gas' then 'natural_gas'
+    when 'gas' then 'natural_gas'
+    when 'ng' then 'natural_gas'
+    when 'coal' then 'coal'
+    when 'bit' then 'coal'
+    when 'sub' then 'coal'
+    when 'lig' then 'coal'
+    when 'ant' then 'coal'
+    when 'nuclear' then 'nuclear'
+    when 'nuc' then 'nuclear'
+    when 'hydro' then 'hydro'
+    when 'wat' then 'hydro'
+    when 'oil' then 'oil'
+    when 'dfo' then 'oil'
+    when 'rfo' then 'oil'
+    when 'ker' then 'oil'
+    when 'biomass' then 'biomass'
+    when 'wood' then 'biomass'
+    when 'wds' then 'biomass'
+    when 'biogas' then 'biomass'
+    when 'lfg' then 'biomass'
+    when 'geothermal' then 'geothermal'
+    when 'geo' then 'geothermal'
+    when 'battery' then 'battery'
+    when 'storage' then 'battery'
+    when '' then null
+    else 'other'
+end
+{% endset %}
+
+-- PUDL plants are aggregated generator rollups grouped by plant_id_eia.
+-- Today they have NULL geometry (the silver model does not yet pull
+-- ``core_eia__entity_plants`` lat/lon). The tile exporter drops features
+-- with NULL geometry, so PUDL plants are invisible on the map until that
+-- ingest lands. They stay in the mart so the schema is correct and so
+-- DuckDB-WASM queries against the bundle return them.
 with pudl_plants as (
-    -- Plants arrive as aggregated generator rollups. Lat/lon is NULL until
-    -- the ``core_eia__entity_plants`` ingest lands; the atlas tolerates
-    -- missing geometry and simply omits those points from the tile build.
     select
         'plant:eia:' || g.plant_id_eia as feature_id,
         'plant' as kind,
-        cast(g.plant_id_eia as varchar) as display_name,
+        coalesce(any_value(e.plant_name_eia), cast(g.plant_id_eia as varchar)) as display_name,
         json_object(
             'plant_id_eia', g.plant_id_eia,
+            'plant_name', any_value(e.plant_name_eia),
+            'state', any_value(e.state),
+            'county', any_value(e.county),
             'capacity_mw', sum(g.capacity_mw),
             'fuels', list(distinct g.fuel_code),
             'balancing_authority', any_value(p.balancing_authority_code_eia),
             'iso_rto_code', any_value(p.iso_rto_code),
-            'nerc_region', any_value(p.nerc_region)
+            'nerc_region', any_value(p.nerc_region),
+            'voltage_kv', null,
+            'fuel', {{ fuel_normalize | replace('{fuel_in}', 'mode(g.fuel_code)') }}
         ) as properties,
-        cast(null as varchar) as geometry_wkt,
+        cast(null as double) as voltage_kv,
+        sum(g.capacity_mw) as capacity_mw,
+        {{ fuel_normalize | replace('{fuel_in}', 'mode(g.fuel_code)') }} as fuel,
+        case
+            when any_value(e.latitude) is not null and any_value(e.longitude) is not null
+                then 'POINT(' || cast(any_value(e.longitude) as varchar)
+                    || ' ' || cast(any_value(e.latitude) as varchar) || ')'
+            else null
+        end as geometry_wkt,
         any_value(g.sources) as sources,
-        any_value(g.licenses) as licenses
+        any_value(g.licenses) as licenses,
+        false as synthetic
     from {{ ref('gold_network__generators') }} g
     left join {{ ref('silver_pudl__eia860_plants') }} p
         on g.plant_id_eia = p.plant_id_eia
+    left join {{ ref('silver_pudl__eia_entity_plants') }} e
+        on g.plant_id_eia = e.plant_id_eia
+    where g.plant_id_eia is not null  -- excludes RTS-GMLC synthetic generators
     group by g.plant_id_eia
 ),
 
-rts_substations as (
-    select
-        'substation:rts:' || native_bus_id as feature_id,
-        'substation' as kind,
-        name as display_name,
-        json_object(
-            'bus_id', bus_id,
-            'base_kv', base_kv,
-            'area', area,
-            'zone', zone
-        ) as properties,
-        case
-            when longitude is not null and latitude is not null
-                then 'POINT(' || cast(longitude as varchar)
-                    || ' ' || cast(latitude as varchar) || ')'
-            else null
-        end as geometry_wkt,
-        sources,
-        licenses
-    from {{ ref('gold_network__buses') }}
-    where 'rts_gmlc' = any(sources)
-),
-
-rts_lines as (
-    select
-        'transmission_line:rts:' || br.native_branch_id as feature_id,
-        'transmission_line' as kind,
-        br.native_branch_id as display_name,
-        json_object(
-            'branch_id', br.branch_id,
-            'from_bus_id', br.from_bus_id,
-            'to_bus_id', br.to_bus_id,
-            'rating_a_mva', br.rating_a_mva,
-            'base_kv', coalesce(bf.base_kv, bt.base_kv)
-        ) as properties,
-        case
-            when bf.longitude is not null and bf.latitude is not null
-                 and bt.longitude is not null and bt.latitude is not null
-                then 'LINESTRING('
-                    || cast(bf.longitude as varchar) || ' '
-                    || cast(bf.latitude as varchar) || ', '
-                    || cast(bt.longitude as varchar) || ' '
-                    || cast(bt.latitude as varchar) || ')'
-            else null
-        end as geometry_wkt,
-        br.sources,
-        br.licenses
-    from {{ ref('gold_network__branches') }} br
-    left join {{ ref('gold_network__buses') }} bf on br.from_bus_id = bf.bus_id
-    left join {{ ref('gold_network__buses') }} bt on br.to_bus_id = bt.bus_id
-),
-
+-- OSM elements come from a materialized silver table so this gold model
+-- doesn't re-parse the ~3 GB of bronze JSON for each downstream CTE. See
+-- silver_osm__elements / silver_osm__linestrings.
 osm_raw as (
-    select
-        src.filename as source_file,
-        u.unnest as element
-    from read_json_auto(
-        [
-            '{{ env_var("GRIDAGENT_DATA_ROOT", "../data_root") }}/bronze/osm/us_tx/power.json',
-            '{{ env_var("GRIDAGENT_DATA_ROOT", "../data_root") }}/bronze/osm/us_ca/power.json',
-            '{{ env_var("GRIDAGENT_DATA_ROOT", "../data_root") }}/bronze/osm/us_ny/power.json'
-        ],
-        maximum_object_size = 1073741824
-    ) src,
-    unnest(src.elements) u
+    select source_file, element from {{ ref('silver_osm__elements') }}
 ),
 
+-- Volt-string parser: OSM `voltage` is volts as string, sometimes
+-- semicolon-separated (e.g. "138000;345000"). Take the first numeric
+-- chunk; treat values > 1000 as volts (divide by 1000), values <= 1000
+-- as already-kV (rare but possible).
 osm_substations as (
     select
         'substation:osm:' || cast(element.id as varchar) as feature_id,
         'substation' as kind,
         coalesce(element.tags['name'], 'OSM substation ' || cast(element.id as varchar)) as display_name,
+        case
+            when try_cast(split_part(element.tags['voltage'], ';', 1) as integer) is null then null
+            when try_cast(split_part(element.tags['voltage'], ';', 1) as integer) > 1000
+                then try_cast(split_part(element.tags['voltage'], ';', 1) as double) / 1000.0
+            else try_cast(split_part(element.tags['voltage'], ';', 1) as double)
+        end as voltage_kv_calc,
         json_object(
             'osm_id', cast(element.id as varchar),
             'power', element.tags['power'],
@@ -130,17 +152,52 @@ osm_substations as (
     where coalesce(element.tags['power'], '') = 'substation'
 ),
 
+osm_substations_final as (
+    select
+        feature_id,
+        kind,
+        display_name,
+        json_merge_patch(properties, json_object('voltage_kv', voltage_kv_calc)) as properties,
+        voltage_kv_calc as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        geometry_wkt,
+        sources,
+        licenses,
+        false as synthetic
+    from osm_substations
+),
+
+-- Plants from OSM: `power=plant` only (utility-scale farms / facilities).
+-- Excludes `power=generator` (individual turbines, rooftop panels) which
+-- would drown the layer in 700K+ noise rows. Capacity parsed best-effort
+-- from `plant:output:electricity` (e.g. "100 MW", "1.5 MW").
 osm_plants as (
     select
         'plant:osm:' || cast(element.id as varchar) as feature_id,
         'plant' as kind,
         coalesce(element.tags['name'], 'OSM plant ' || cast(element.id as varchar)) as display_name,
+        -- Capacity parser: leading float, optional whitespace, optional MW unit.
+        case
+            when element.tags['plant:output:electricity'] is null then null
+            when regexp_extract(
+                element.tags['plant:output:electricity'],
+                '^([0-9]+(?:\.[0-9]+)?)\s*(?:MW|mw)?', 1
+            ) = '' then null
+            else try_cast(
+                regexp_extract(
+                    element.tags['plant:output:electricity'],
+                    '^([0-9]+(?:\.[0-9]+)?)\s*(?:MW|mw)?', 1
+                ) as double
+            )
+        end as capacity_mw_calc,
+        coalesce(element.tags['plant:source'], element.tags['generator:source']) as fuel_in,
         json_object(
             'osm_id', cast(element.id as varchar),
             'power', element.tags['power'],
             'plant_source', element.tags['plant:source'],
-            'generator_source', element.tags['generator:source'],
-            'capacity', element.tags['plant:output:electricity'],
+            'capacity_raw', element.tags['plant:output:electricity'],
+            'operator', element.tags['operator'],
             'source_file', source_file
         ) as properties,
         case
@@ -155,29 +212,46 @@ osm_plants as (
         ['osm'] as sources,
         ['ODbL-1.0'] as licenses
     from osm_raw
-    where coalesce(element.tags['power'], '') in ('plant', 'generator')
+    where coalesce(element.tags['power'], '') = 'plant'
+),
+
+osm_plants_final as (
+    select
+        feature_id,
+        kind,
+        display_name,
+        json_merge_patch(
+            properties,
+            json_object('capacity_mw', capacity_mw_calc, 'fuel', {{ fuel_normalize | replace('{fuel_in}', 'fuel_in') }})
+        ) as properties,
+        cast(null as double) as voltage_kv,
+        capacity_mw_calc as capacity_mw,
+        {{ fuel_normalize | replace('{fuel_in}', 'fuel_in') }} as fuel,
+        geometry_wkt,
+        sources,
+        licenses,
+        false as synthetic
+    from osm_plants
 ),
 
 osm_linestrings as (
-    select
-        element.id as osm_id,
-        source_file,
-        element.tags as tags,
-        string_agg(
-            cast(g.unnest.lon as varchar) || ' ' || cast(g.unnest.lat as varchar),
-            ', ' order by g.ordinality
-        ) as coord_list
-    from osm_raw,
-    unnest(element.geometry) with ordinality as g(unnest, ordinality)
-    where element.type = 'way'
-    group by 1, 2, 3
+    select osm_id, source_file, tags, coord_list
+    from {{ ref('silver_osm__linestrings') }}
 ),
 
+-- Transmission: drop OSM `power=line` below 60 kV (distribution noise).
+-- Treat unparseable voltage as null and exclude from this layer.
 osm_transmission_lines as (
     select
         'transmission_line:osm:' || cast(osm_id as varchar) as feature_id,
         'transmission_line' as kind,
         coalesce(tags['name'], 'OSM line ' || cast(osm_id as varchar)) as display_name,
+        case
+            when try_cast(split_part(tags['voltage'], ';', 1) as integer) is null then null
+            when try_cast(split_part(tags['voltage'], ';', 1) as integer) > 1000
+                then try_cast(split_part(tags['voltage'], ';', 1) as double) / 1000.0
+            else try_cast(split_part(tags['voltage'], ';', 1) as double)
+        end as voltage_kv_calc,
         json_object(
             'osm_id', cast(osm_id as varchar),
             'power', tags['power'],
@@ -190,7 +264,24 @@ osm_transmission_lines as (
         ['osm'] as sources,
         ['ODbL-1.0'] as licenses
     from osm_linestrings
-    where coalesce(tags['power'], '') in ('line', 'minor_line', 'cable')
+    where coalesce(tags['power'], '') in ('line', 'cable')
+),
+
+osm_transmission_lines_final as (
+    select
+        feature_id,
+        kind,
+        display_name,
+        json_merge_patch(properties, json_object('voltage_kv', voltage_kv_calc)) as properties,
+        voltage_kv_calc as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        geometry_wkt,
+        sources,
+        licenses,
+        false as synthetic
+    from osm_transmission_lines
+    where voltage_kv_calc is not null and voltage_kv_calc >= 60
 ),
 
 osm_gas_pipelines as (
@@ -206,9 +297,13 @@ osm_gas_pipelines as (
             'diameter', tags['diameter'],
             'source_file', source_file
         ) as properties,
+        cast(null as double) as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
         'LINESTRING(' || coord_list || ')' as geometry_wkt,
         ['osm'] as sources,
-        ['ODbL-1.0'] as licenses
+        ['ODbL-1.0'] as licenses,
+        false as synthetic
     from osm_linestrings
     where coalesce(tags['man_made'], '') = 'pipeline'
       and lower(coalesce(tags['substance'], '')) = 'gas'
@@ -226,8 +321,12 @@ queue_projects as (
             'fuel_type', q.fuel_type,
             'capacity_mw', q.capacity_mw,
             'queue_date', q.queue_date,
-            'proposed_completion_date', q.proposed_completion_date
+            'proposed_completion_date', q.proposed_completion_date,
+            'fuel', {{ fuel_normalize | replace('{fuel_in}', 'q.fuel_type') }}
         ) as properties,
+        cast(null as double) as voltage_kv,
+        q.capacity_mw,
+        {{ fuel_normalize | replace('{fuel_in}', 'q.fuel_type') }} as fuel,
         case
             when q.poi_longitude is not null and q.poi_latitude is not null
                 then 'POINT(' || cast(q.poi_longitude as varchar)
@@ -235,22 +334,155 @@ queue_projects as (
             else null
         end as geometry_wkt,
         [coalesce(q.source, 'queue_feed')] as sources,
-        [coalesce(q.license, 'unknown')] as licenses
+        [coalesce(q.license, 'unknown')] as licenses,
+        false as synthetic
     from {{ ref('gold_market__queue_snapshot') }} q
+    -- Drop withdrawn/completed historical entries and rows with zero metadata.
+    where lower(coalesce(q.queue_status, '')) in (
+        'active', 'pending', 'in construction', 'construction',
+        'planning', 'studied', 'studies underway', 'feasibility',
+        'system impact study', 'facilities study', 'i.a. signed',
+        'ia signed', 'interconnection agreement signed', 'operational'
+    )
+      and (q.fuel_type is not null or q.capacity_mw is not null)
+),
+
+-- ---------------------------------------------------------------------------
+-- RTS-GMLC synthetic grid (73-bus NREL research test system, geographically
+-- placed in Southern California / Mojave Desert for visualization purposes).
+-- synthetic=true lets the atlas frontend toggle these off for real-data-only
+-- views while keeping them visible for internal power-flow studies.
+-- ---------------------------------------------------------------------------
+rts_buses as (
+    select * from {{ ref('silver_rts_gmlc__buses') }}
+),
+
+-- Each bus becomes a substation point. base_kv drives the voltage color ramp.
+rts_substations as (
+    select
+        'substation:rts_gmlc:' || bus_id as feature_id,
+        'substation' as kind,
+        coalesce(name, 'RTS bus ' || bus_id) as display_name,
+        json_object(
+            'bus_id', bus_id,
+            'base_kv', base_kv,
+            'bus_type', bus_type,
+            'area', area,
+            'zone', zone,
+            'synthetic', true
+        ) as properties,
+        base_kv as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        'POINT(' || cast(longitude as varchar) || ' ' || cast(latitude as varchar) || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_buses
+    where latitude is not null and longitude is not null
+),
+
+-- Join generators to bus coordinates; each generator becomes a plant point.
+rts_generators_geo as (
+    select
+        g.generator_id,
+        g.bus_id,
+        g.p_max_mw,
+        g.fuel,
+        g.unit_type,
+        g.category,
+        b.latitude,
+        b.longitude
+    from {{ ref('silver_rts_gmlc__generators') }} g
+    join rts_buses b on g.bus_id = b.bus_id
+    where b.latitude is not null and b.longitude is not null
+),
+
+rts_plants as (
+    select
+        'plant:rts_gmlc:' || generator_id as feature_id,
+        'plant' as kind,
+        generator_id as display_name,
+        json_object(
+            'generator_id', generator_id,
+            'bus_id', bus_id,
+            'capacity_mw', p_max_mw,
+            'fuel', fuel,
+            'unit_type', unit_type,
+            'category', category,
+            'synthetic', true
+        ) as properties,
+        cast(null as double) as voltage_kv,
+        p_max_mw as capacity_mw,
+        {{ fuel_normalize | replace('{fuel_in}', 'fuel') }} as fuel,
+        'POINT(' || cast(longitude as varchar) || ' ' || cast(latitude as varchar) || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_generators_geo
+),
+
+-- Join branches to from/to bus coordinates for LineString geometry.
+-- base_kv from the from-bus drives the voltage color ramp.
+rts_branches_geo as (
+    select
+        br.branch_id,
+        br.from_bus_id,
+        br.to_bus_id,
+        br.rating_a_mva,
+        bf.base_kv,
+        bf.latitude  as from_lat,
+        bf.longitude as from_lon,
+        bt.latitude  as to_lat,
+        bt.longitude as to_lon
+    from {{ ref('silver_rts_gmlc__branches') }} br
+    join rts_buses bf on br.from_bus_id = bf.bus_id
+    join rts_buses bt on br.to_bus_id   = bt.bus_id
+    where bf.latitude is not null and bf.longitude is not null
+      and bt.latitude is not null and bt.longitude is not null
+),
+
+rts_transmission_lines as (
+    select
+        'transmission_line:rts_gmlc:' || branch_id as feature_id,
+        'transmission_line' as kind,
+        'RTS branch ' || branch_id as display_name,
+        json_object(
+            'branch_id', branch_id,
+            'from_bus', from_bus_id,
+            'to_bus', to_bus_id,
+            'rating_mva', rating_a_mva,
+            'base_kv', base_kv,
+            'synthetic', true
+        ) as properties,
+        base_kv as voltage_kv,
+        cast(null as double) as capacity_mw,
+        cast(null as varchar) as fuel,
+        'LINESTRING('
+            || cast(from_lon as varchar) || ' ' || cast(from_lat as varchar)
+            || ', '
+            || cast(to_lon as varchar) || ' ' || cast(to_lat as varchar)
+            || ')' as geometry_wkt,
+        ['rts_gmlc'] as sources,
+        ['BSD-3-Clause'] as licenses,
+        true as synthetic
+    from rts_branches_geo
 )
 
 select * from pudl_plants
 union all by name
-select * from rts_substations
+select * from osm_substations_final
 union all by name
-select * from rts_lines
+select * from osm_plants_final
 union all by name
-select * from osm_substations
-union all by name
-select * from osm_plants
-union all by name
-select * from osm_transmission_lines
+select * from osm_transmission_lines_final
 union all by name
 select * from osm_gas_pipelines
 union all by name
 select * from queue_projects
+union all by name
+select * from rts_substations
+union all by name
+select * from rts_plants
+union all by name
+select * from rts_transmission_lines

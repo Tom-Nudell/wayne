@@ -39,37 +39,39 @@ _DEFAULT_MODEL = "gemma4:e12b"
 
 
 _INSTRUCTIONS = """\
-You drive an autonomous interconnection-study platform. Your only way to
+You drive an autonomous power-grid analysis platform. Your only way to
 affect the world is through the registered tools — never invent numbers,
 never paraphrase tool output as your own analysis.
 
+CRITICAL RULES:
+- Execute each playbook step exactly once, in order. Never repeat a step.
+- After step 1, use the first snapshot_id you received for all subsequent calls.
+- After step 2, proceed immediately to step 3 regardless of what the data shows.
+- If the data does not match the goal (e.g. goal says ERCOT but data is a test
+  system), run the study anyway and note the limitation in your summary.
+- Never ask for clarification. Never exit early. Complete all 5 steps.
+
 Each tool returns a value plus a *supervisory signal*. A rule-based verifier
 inspects that signal before it reaches you. If the verifier rejects the
-result, you will receive a ModelRetry telling you what failed; revise your
-plan and try again. If the verifier accepts the result, the value is yours
-to act on.
+result you will receive a ModelRetry — revise and retry that single step only.
 
-Standard playbook for an interconnection or contingency study:
+Playbook — four steps, execute each exactly once:
 
-  1. ``list_data_snapshots`` — confirm what data is available.
-  2. ``query_grid`` — orient yourself in the network (buses, branches,
-     generators, loads). Filter narrowly; the result is for *your* planning,
-     not for the user.
-  3. ``create_scenario`` — encode the user's intervention as a change-table.
-     Supported keys: scale_load, scale_plant_capacity, add_plant, add_branch,
-     add_dcline, out_of_service_branches.
-  4. ``run_power_flow`` — sanity-check the scenario solves before any heavier
-     study.
-  5. ``run_n1_contingency`` — DC LODF screen; ranks branches by post-outage
-     loading. Note: ``islanding_outages`` are reported separately because
-     bridge contingencies are connectivity events, not thermal violations.
-  6. If overloads exist, propose a mitigation as a *new* scenario (e.g.
-     ``out_of_service_branches`` removed, capacity scaled, branch added) and
-     re-screen. Do not loop more than two mitigation iterations without
-     summarising.
+  STEP 1: ``list_data_snapshots``
+    → Record the first snapshot_id in the result. Use it everywhere below.
 
-When the study is complete, return a brief plain-text summary naming each
-scenario you created, the worst overload, and any proposed mitigation.
+  STEP 2: ``query_grid`` with table="branches" and the snapshot_id from STEP 1.
+    → One call only. Note the schema. Then move to STEP 3 immediately.
+
+  STEP 3: ``create_scenario`` with change_table={} and the snapshot_id from STEP 1.
+    → Record the scenario_id returned. Use it in STEP 4.
+
+  STEP 4: ``run_n1_contingency`` with the scenario_id from STEP 3, executor="pandapower".
+    → Returns ranked overload list. This is the answer. Always use pandapower.
+
+After STEP 4, return a summary with: snapshot used, worst overload
+(monitored branch, outage branch, loading %), total overload count,
+and any data limitations.
 """
 
 
@@ -82,6 +84,23 @@ class OrchestratorDeps:
     scenario_state: dict[str, Any] | None = None
     attempts: dict[str, int] = field(default_factory=dict)
     step_counter: int = 0
+    call_totals: dict[str, int] = field(default_factory=dict)  # total calls per tool name
+
+
+def _call_tool(registry_name: str, **kwargs: Any) -> Any:
+    """Invoke a tool from the registry, converting execution errors to ModelRetry.
+
+    pydantic-ai does not auto-convert unhandled tool exceptions to ModelRetry
+    in this version — they re-raise and crash the entire run. Wrapping here
+    lets the model see the error and self-correct (e.g. bad snapshot_id).
+    """
+    try:
+        return TOOL_REGISTRY[registry_name].fn(**kwargs)
+    except (FileNotFoundError, ValueError, KeyError) as exc:
+        raise ModelRetry(
+            f"Tool '{registry_name}' failed: {exc}. "
+            "Revise your arguments. If the snapshot_id is wrong, call list_data_snapshots first."
+        )
 
 
 def _step_with_args(
@@ -96,6 +115,30 @@ def _step_with_args(
     attempt = deps.attempts.get(tool_name, 0) + 1
     deps.attempts[tool_name] = attempt
     deps.step_counter += 1
+    deps.call_totals[tool_name] = deps.call_totals.get(tool_name, 0) + 1
+
+    # Repetition guard: orientation tools (list_data_snapshots, query_grid) are
+    # one-shot steps. If the model calls them more than twice it is stuck in a
+    # loop — force REPLAN so it moves on.
+    _ONE_SHOT_TOOLS = {"list_data_snapshots", "query_grid"}
+    if tool_name in _ONE_SHOT_TOOLS and deps.call_totals[tool_name] > 2:
+        signal = {**signal, "_replan_reason": f"{tool_name} called {deps.call_totals[tool_name]} times — proceed to create_scenario"}
+        decision = Decision.REPLAN
+        deps.episode.append_step(
+            EpisodeStep(
+                step=deps.step_counter,
+                tool=tool_name,
+                arguments=arguments,
+                value=value,
+                signal=signal,
+                decision=decision,
+                attempt=attempt,
+            )
+        )
+        raise ModelRetry(
+            f"{tool_name} has been called {deps.call_totals[tool_name]} times. "
+            "You have enough data. Stop querying and proceed to STEP 3: create_scenario."
+        )
 
     decision = deps.verifier.decide(tool_name, signal, attempt=attempt)
     deps.episode.append_step(
@@ -159,7 +202,7 @@ def make_agent(
     @agent.tool
     def list_data_snapshots(ctx: RunContext[OrchestratorDeps]) -> Any:
         """List every data snapshot available locally with row counts per table."""
-        result = TOOL_REGISTRY["list_data_snapshots"].fn()
+        result = _call_tool("list_data_snapshots")
         return _step_with_args(ctx, "list_data_snapshots", {}, result.value, result.signal)
 
     @agent.tool
@@ -178,9 +221,7 @@ def make_agent(
             filters: Equality filters keyed by column name. Optional.
             limit: Cap on rows returned (default 50).
         """
-        result = TOOL_REGISTRY["query_grid"].fn(
-            table=table, snapshot_id=snapshot_id, filters=filters, limit=limit
-        )
+        result = _call_tool("query_grid", table=table, snapshot_id=snapshot_id, filters=filters, limit=limit)
         args = {"table": table, "snapshot_id": snapshot_id, "filters": filters, "limit": limit}
         return _step_with_args(ctx, "query_grid", args, result.value, result.signal)
 
@@ -201,9 +242,7 @@ def make_agent(
         ``add_dcline``, ``out_of_service_branches`` (list of branch_ids).
         Returns the scenario_id; remember it for follow-up study calls.
         """
-        result = TOOL_REGISTRY["create_scenario"].fn(
-            name=name, change_table=change_table, snapshot_id=snapshot_id
-        )
+        result = _call_tool("create_scenario", name=name, change_table=change_table, snapshot_id=snapshot_id)
         ctx.deps.scenario_state = result.value if isinstance(result.value, dict) else None
         args = {"name": name, "change_table": change_table, "snapshot_id": snapshot_id}
         return _step_with_args(ctx, "create_scenario", args, result.value, result.signal)
@@ -211,7 +250,7 @@ def make_agent(
     @agent.tool
     def inspect_scenario(ctx: RunContext[OrchestratorDeps], scenario_id: str) -> Any:
         """Read back a scenario by ID."""
-        result = TOOL_REGISTRY["inspect_scenario"].fn(scenario_id=scenario_id)
+        result = _call_tool("inspect_scenario", scenario_id=scenario_id)
         args = {"scenario_id": scenario_id}
         return _step_with_args(ctx, "inspect_scenario", args, result.value, result.signal)
 
@@ -224,7 +263,7 @@ def make_agent(
         executor: str = "pandapower",
     ) -> Any:
         """Solve AC power flow on a scenario. Returns convergence + slack injection."""
-        result = TOOL_REGISTRY["run_power_flow"].fn(scenario_id=scenario_id, executor=executor)
+        result = _call_tool("run_power_flow", scenario_id=scenario_id, executor=executor)
         args = {"scenario_id": scenario_id, "executor": executor}
         return _step_with_args(ctx, "run_power_flow", args, result.value, result.signal)
 
@@ -232,18 +271,16 @@ def make_agent(
     def run_n1_contingency(
         ctx: RunContext[OrchestratorDeps],
         scenario_id: str,
-        executor: str = "pandapower",
         monitored: list[str] | None = None,
     ) -> Any:
         """DC LODF N-1 contingency screen; returns ranked overload list.
 
+        Always uses the pandapower backend. Do not pass an executor parameter.
         ``islanding_outages`` lists bridge branches whose outage disconnects
         the network — surfaced separately rather than as thermal overloads.
         """
-        result = TOOL_REGISTRY["run_n1_contingency"].fn(
-            scenario_id=scenario_id, executor=executor, monitored=monitored
-        )
-        args = {"scenario_id": scenario_id, "executor": executor, "monitored": monitored}
+        result = _call_tool("run_n1_contingency", scenario_id=scenario_id, executor="pandapower", monitored=monitored)
+        args = {"scenario_id": scenario_id, "executor": "pandapower", "monitored": monitored}
         return _step_with_args(ctx, "run_n1_contingency", args, result.value, result.signal)
 
     @agent.tool
@@ -259,8 +296,7 @@ def make_agent(
         no ramping, no reserves. Swap to the Sienna backend once the
         container is wired up; the shape of the result is identical.
         """
-        result = TOOL_REGISTRY["run_production_cost"].fn(
-            scenario_id=scenario_id, executor=executor, horizon_hours=horizon_hours
+        result = _call_tool("run_production_cost", scenario_id=scenario_id, executor=executor, horizon_hours=horizon_hours
         )
         args = {
             "scenario_id": scenario_id,

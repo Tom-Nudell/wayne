@@ -13,11 +13,15 @@ models:
         description: Generator ID within the plant.
         tests: [not_null]
       - name: capacity_mw
-        description: Nameplate capacity (MW).
+        description: Nameplate capacity (MW). Some EIA-860 records lack reported capacity.
         tests:
-          - not_null
+          - not_null:
+              config:
+                severity: warn
           - dbt_utils.expression_is_true:
               expression: ">= 0"
+              config:
+                where: "capacity_mw IS NOT NULL"
       - name: source
         tests:
           - accepted_values:

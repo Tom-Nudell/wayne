@@ -47,13 +47,18 @@ Tier = Literal["free", "pro", "enterprise"]
 class GridFeatureProperties(BaseModel):
     """Per-feature provenance carried in the gold_atlas mart and on every
     rendered popover. ``sources`` and ``licenses`` are arrays so a
-    conflated feature can credit every upstream input."""
+    conflated feature can credit every upstream input.
+
+    ``synthetic`` marks features from research test systems (e.g. RTS-GMLC)
+    that are included in the atlas for internal tooling but are not real US
+    infrastructure. The frontend toggle hides them for customer-facing views."""
 
     id: str
     kind: FeatureKind
     name: str | None = None
     sources: tuple[str, ...]
     licenses: tuple[str, ...]
+    synthetic: bool = False
 
 
 class ManifestLayer(BaseModel):

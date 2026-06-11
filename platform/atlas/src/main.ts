@@ -1,7 +1,13 @@
 /**
  * Atlas entrypoint. Wires MapLibre + PMTiles, registers the canonical
- * gold_atlas layers, and leaves seams for the deck.gl LMP heatmap and
- * scenario-overlay integrations.
+ * gold_atlas layers, and implements the episode overlay seam.
+ *
+ * Episode overlay flow:
+ *   1. Run: python -m gridagent_orchestrator.run --goal "..." \
+ *              --atlas-overlay-dir platform/atlas/public/overlays
+ *   2. Open: http://localhost:5173/?episode=<id>
+ *   3. Atlas fetches /overlays/<id>/provenance.json → discovers geojson files
+ *   4. Each geojson becomes a MapLibre source + layer; provenance panel updates.
  *
  * Aesthetic: the grid as a living mycelial network — calm earth tones,
  * branching hyphae for transmission, fruiting bodies for plants. Alarm
@@ -13,12 +19,14 @@ import { Protocol } from "pmtiles";
 import { PALETTE } from "./theme";
 
 const TILE_BASE = import.meta.env.VITE_TILE_BASE ?? "/tiles";
+const OVERLAY_BASE = import.meta.env.VITE_OVERLAY_BASE ?? "/overlays";
 
 // Register the pmtiles:// protocol so MapLibre can range-fetch a single .pmtiles file.
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
 
-const HYPHAE_PAINT: maplibregl.LinePaint = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const HYPHAE_PAINT: Record<string, any> = {
   // Voltage maps to a warm earth gradient — moss to heartwood — rather than
   // engineering primaries. Higher voltage = older, woodier hyphae.
   "line-color": [
@@ -127,6 +135,31 @@ const map = new maplibregl.Map({
   zoom: 4,
 });
 
+// ---------------------------------------------------------------------------
+// Synthetic-data toggle (RTS-GMLC 73-bus test system)
+// ---------------------------------------------------------------------------
+// Features tagged synthetic=true in the tile properties are real-looking but
+// not real US infrastructure. The toggle checkbox reveals/hides them.
+// The filter is applied after style load because layers don't exist before that.
+const BASE_LAYERS = ["substations", "plants", "transmission_lines"] as const;
+
+function applySyntheticFilter(show: boolean): void {
+  for (const layer of BASE_LAYERS) {
+    if (!map.getLayer(layer)) continue;
+    // null = no filter (show all); the expression hides synthetic=true features.
+    map.setFilter(layer, show ? null : ["!=", ["get", "synthetic"], true]);
+  }
+}
+
+map.on("load", () => {
+  const cb = document.getElementById("show-synthetic") as HTMLInputElement | null;
+  if (cb) {
+    // Start with the initial checked state (true = show synthetic).
+    applySyntheticFilter(cb.checked);
+    cb.addEventListener("change", () => applySyntheticFilter(cb.checked));
+  }
+});
+
 // Provenance popovers — every gold_atlas feature carries `sources` and `licenses` arrays.
 for (const layer of ["substations", "plants", "transmission_lines"]) {
   map.on("click", layer, (e) => {
@@ -146,6 +179,187 @@ for (const layer of ["substations", "plants", "transmission_lines"]) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Episode overlay seam  (?episode=<id>)
+// ---------------------------------------------------------------------------
+
+interface Provenance {
+  episode_id: string;
+  question: string;
+  started_at: string;
+  tools_called: string[];
+  overlays: string[];  // list of .geojson filenames in this episode dir
+  data_version: string;
+  model: string;
+}
+
+const panel = document.getElementById("panel")!;
+
+function setPanel(html: string): void {
+  panel.innerHTML = html;
+}
+
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function loadEpisodeOverlay(episodeId: string): Promise<void> {
+  setPanel(`<strong>loading episode</strong><br/><code>${escHtml(episodeId)}</code>…`);
+
+  let provenance: Provenance;
+  try {
+    const res = await fetch(`${OVERLAY_BASE}/${episodeId}/provenance.json`);
+    if (!res.ok) throw new Error(`provenance fetch ${res.status}`);
+    provenance = (await res.json()) as Provenance;
+  } catch (err) {
+    setPanel(
+      `<strong>episode not found</strong><br/>` +
+        `<code>${escHtml(episodeId)}</code><br/>` +
+        `<small>Run with <code>--atlas-overlay-dir platform/atlas/public/overlays</code> to populate.</small>`,
+    );
+    console.warn("Episode overlay load failed:", err);
+    return;
+  }
+
+  // Collect all feature coordinates across overlays for auto-zoom.
+  let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
+  function expandBounds(coords: number[][]): void {
+    for (const pt of coords) {
+      const lon = pt[0], lat = pt[1];
+      if (lon == null || lat == null) continue;
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+
+  // Load each overlay file listed in provenance.
+  let totalFeatures = 0;
+  for (const filename of provenance.overlays) {
+    const layerId = `ep_${episodeId}_${filename.replace(".geojson", "")}`;
+    try {
+      const res = await fetch(`${OVERLAY_BASE}/${episodeId}/${filename}`);
+      if (!res.ok) continue;
+      const geojson = await res.json();
+      totalFeatures += (geojson.features as unknown[]).length;
+
+      // Accumulate bounds from all geometries.
+      for (const feature of geojson.features as Array<{ geometry: { type: string; coordinates: unknown } }>) {
+        const { type, coordinates } = feature.geometry;
+        if (type === "LineString") expandBounds(coordinates as number[][]);
+        else if (type === "Point") expandBounds([coordinates as number[]]);
+        else if (type === "MultiLineString") for (const seg of coordinates as number[][][]) expandBounds(seg);
+      }
+
+      map.addSource(layerId, { type: "geojson", data: geojson });
+
+      // N-1 overloads: lines colored by loading percentage.
+      if (filename.includes("n1_contingency")) {
+        map.addLayer({
+          id: layerId,
+          type: "line",
+          source: layerId,
+          layout: {
+            "line-cap": "round",
+            "line-join": "round",
+          },
+          paint: {
+            "line-color": PALETTE.overload,
+            // Width scales with loading: 100% → 2px, 200%+ → 8px.
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["coalesce", ["get", "loading_pct"], 100],
+              100, 2,
+              200, 8,
+            ],
+            "line-opacity": 0.9,
+          },
+        });
+        // Popover on click.
+        map.on("click", layerId, (e) => {
+          const f = e.features?.[0];
+          if (!f) return;
+          const p = f.properties ?? {};
+          new maplibregl.Popup({ className: "myc-popup", maxWidth: "280px" })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<strong>overload: ${escHtml(String(p["monitored"] ?? ""))}</strong><br/>` +
+                `<small>outage: ${escHtml(String(p["outage"] ?? ""))}</small><br/>` +
+                `<small>loading: ${typeof p["loading_pct"] === "number" ? p["loading_pct"].toFixed(1) : "?"}%</small><br/>` +
+                `<small>post flow: ${typeof p["post_flow_mw"] === "number" ? p["post_flow_mw"].toFixed(1) : "?"} MW</small>`,
+            )
+            .addTo(map);
+        });
+        map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+        map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
+      } else {
+        // Generic overlay: circle layer for point/polygon data.
+        map.addLayer({
+          id: layerId,
+          type: "circle",
+          source: layerId,
+          paint: {
+            "circle-radius": 5,
+            "circle-color": PALETTE.mitigation,
+            "circle-opacity": 0.8,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn(`Failed to load overlay ${filename}:`, err);
+    }
+  }
+
+  // Fly to the bounding box of all overlay features.
+  if (isFinite(minLon) && totalFeatures > 0) {
+    // Pad the bounds slightly so lines aren't at the canvas edge.
+    const pad = 0.5;
+    map.fitBounds(
+      [[minLon - pad, minLat - pad], [maxLon + pad, maxLat + pad]],
+      { padding: 60, duration: 1200 }
+    );
+  }
+
+  // Render provenance panel.
+  const ts = provenance.started_at
+    ? new Date(parseFloat(provenance.started_at) * 1000).toLocaleString()
+    : "unknown";
+  const toolList = provenance.tools_called
+    .filter((t, i, a) => a.indexOf(t) === i)  // dedupe
+    .map((t) => `<code>${escHtml(t)}</code>`)
+    .join(", ");
+
+  setPanel(
+    `<strong>episode · ${escHtml(provenance.episode_id)}</strong><br/>` +
+      `<em>${escHtml(provenance.question)}</em><br/><br/>` +
+      `<small>run: ${escHtml(ts)}</small><br/>` +
+      `<small>model: ${escHtml(provenance.model || "unknown")}</small><br/>` +
+      `<small>tools: ${toolList || "none"}</small><br/>` +
+      `<small>overlays: ${totalFeatures} features</small>`,
+  );
+}
+
+// Parse ?episode=<id> and trigger load after the map style is ready.
+const episodeId = new URLSearchParams(window.location.search).get("episode");
+if (episodeId) {
+  map.on("load", () => {
+    loadEpisodeOverlay(episodeId).catch(console.error);
+  });
+} else {
+  // Default panel — no episode param.
+  setPanel(
+    `<strong>gridagent · atlas</strong><br/>` +
+      `<em>a living network</em><br/>` +
+      `Layers stream from <code>VITE_TILE_BASE</code>; queries run in-browser via DuckDB-WASM.`,
+  );
+}
+
 // Phase 5+ seams. The data helpers are wired; the visual layers attach here
 // once the market mart carries real rows (GridStatus ingest + dbt build).
 // Keeping this as a real import (not a comment) forces the types to stay
@@ -153,9 +367,5 @@ for (const layer of ["substations", "plants", "transmission_lines"]) {
 import { fetchLmpWindow, fetchQueueSnapshot } from "./data";
 void fetchLmpWindow;   // reserved for deck.gl HeatmapLayer
 void fetchQueueSnapshot; // reserved for the queue panel
-
-// TODO Phase 5+: ?episode=<id> query string -> fetch overlay GeoJSON; use
-//                PALETTE.overload (red) and PALETTE.mitigation (green) — the
-//                only saturated colors on the map, so the eye finds them.
 
 export {};
