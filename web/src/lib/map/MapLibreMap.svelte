@@ -151,8 +151,22 @@
         }
       });
     };
-    if (m.isStyleLoaded()) apply();
-    else m.once('load', apply);
+    // Don't gate on isStyleLoaded(): it reports false whenever any tile is
+    // still loading, and the 'load' event only ever fires once per map — a
+    // listener added after that waits forever. addSource works any time
+    // after initial style load, so try immediately and fall back to the
+    // next 'idle' (which re-fires) only if the style genuinely isn't ready.
+    try {
+      apply();
+    } catch {
+      m.once('idle', () => {
+        try {
+          apply();
+        } catch {
+          // Style never became ready; nothing to draw.
+        }
+      });
+    }
   });
 
   // ---- popover rendering helpers ----
