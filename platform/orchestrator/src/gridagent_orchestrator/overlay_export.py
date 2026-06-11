@@ -1,8 +1,14 @@
-"""Build a GeoJSON overlay from an episode log's last ``run_n1_contingency`` step.
+"""Build GeoJSON overlays from episode logs for the atlas display terminal.
 
-Maps overloaded *monitored* branches as LineStrings (lat/lon from the snapshot
-buses table) so the atlas can highlight agent-discovered thermal issues in
-``PALETTE.overload`` red.
+Layout written by ``write_episode_overlays()``:
+  {overlay_dir}/{episode_id}/n1_contingency.geojson
+  {overlay_dir}/{episode_id}/provenance.json
+
+The provenance sidecar lists every overlay file so the atlas JS knows what
+to fetch without directory listing.
+
+Legacy function ``write_n1_overlay_from_episode()`` (flat file output) is
+kept for the CLI ``-o`` flag. New code should use ``write_episode_overlays()``.
 """
 
 from __future__ import annotations
@@ -22,16 +28,18 @@ def _bundle_root() -> Path:
     return Path(os.environ.get("GRIDAGENT_DATA_ROOT", "data_root")) / "bundle"
 
 
-def _iter_steps(log_path: Path) -> list[dict[str, Any]]:
+def _parse_log(log_path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for line in log_path.read_text().splitlines():
         line = line.strip()
         if not line:
             continue
-        rec = json.loads(line)
-        if rec.get("event") == "step":
-            rows.append(rec)
+        rows.append(json.loads(line))
     return rows
+
+
+def _iter_steps(log_path: Path) -> list[dict[str, Any]]:
+    return [r for r in _parse_log(log_path) if r.get("event") == "step"]
 
 
 def build_n1_overlay_features(
@@ -86,6 +94,165 @@ def build_n1_overlay_features(
     return features
 
 
+# ---------------------------------------------------------------------------
+# General overlay / provenance helpers
+# ---------------------------------------------------------------------------
+
+
+def write_geojson_overlay(
+    episode_id: str,
+    tool_name: str,
+    features: list[dict[str, Any]],
+    metadata: dict[str, Any],
+    *,
+    overlay_dir: Path,
+) -> Path:
+    """Write a FeatureCollection to ``{overlay_dir}/{episode_id}/{tool_name}.geojson``.
+
+    ``metadata`` is embedded in the FeatureCollection under the ``metadata`` key
+    so the atlas can surface it in popovers without fetching a separate file.
+    Returns the path written.
+    """
+    ep_dir = overlay_dir / episode_id
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    out = ep_dir / f"{tool_name}.geojson"
+    collection: dict[str, Any] = {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": metadata,
+    }
+    out.write_text(json.dumps(collection, indent=2))
+    return out
+
+
+def write_provenance(
+    episode_id: str,
+    *,
+    question: str,
+    started_at: str,
+    tools_called: list[str],
+    overlays: list[str],
+    data_version: str = "",
+    model: str = "",
+    overlay_dir: Path,
+) -> Path:
+    """Write ``{overlay_dir}/{episode_id}/provenance.json``.
+
+    ``overlays`` lists every ``.geojson`` filename in this episode directory
+    so the atlas can fetch them without a directory listing API.
+    """
+    ep_dir = overlay_dir / episode_id
+    ep_dir.mkdir(parents=True, exist_ok=True)
+    out = ep_dir / "provenance.json"
+    doc: dict[str, Any] = {
+        "episode_id": episode_id,
+        "question": question,
+        "started_at": started_at,
+        "tools_called": tools_called,
+        "overlays": overlays,
+        "data_version": data_version,
+        "model": model,
+    }
+    out.write_text(json.dumps(doc, indent=2))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# High-level entry points
+# ---------------------------------------------------------------------------
+
+
+def write_episode_overlays(
+    episode_log: Path,
+    overlay_dir: Path,
+    *,
+    bundle_root: Path | None = None,
+    max_features: int = 40,
+) -> tuple[int, str]:
+    """Parse ``episode_log`` and write all spatial overlays + provenance.
+
+    Output layout::
+
+        {overlay_dir}/{episode_id}/n1_contingency.geojson   (if N-1 ran)
+        {overlay_dir}/{episode_id}/provenance.json
+
+    Returns ``(total_feature_count, episode_id)``.
+    """
+    bundle_root = bundle_root or _bundle_root()
+    records = _parse_log(episode_log)
+
+    start_rec = next((r for r in records if r.get("event") == "start"), None)
+    if start_rec is None:
+        raise ValueError(f"No start record in {episode_log}")
+
+    episode_id: str = start_rec.get("episode_id") or episode_log.stem.removeprefix("episode_")
+    goal: str = start_rec.get("goal", "")
+    started_at: str = str(start_rec.get("ts", ""))
+
+    steps = [r for r in records if r.get("event") == "step"]
+    tools_called = [s.get("tool", "") for s in steps if s.get("tool")]
+
+    overlays_written: list[str] = []
+    total_features = 0
+
+    # N-1 contingency — use the last step in case the agent retried.
+    for rec in reversed(steps):
+        if rec.get("tool") != "run_n1_contingency":
+            continue
+        args = rec.get("arguments") or {}
+        scenario_id = args.get("scenario_id")
+        if not scenario_id:
+            break
+        value = rec.get("value") or {}
+        ranking = value.get("ranking") or []
+        if not ranking:
+            break
+        try:
+            scenario = load_scenario(str(scenario_id))
+            snapshot_id = scenario.get("snapshot_id")
+            if not snapshot_id:
+                candidates = sorted(
+                    (p for p in bundle_root.iterdir() if p.is_dir() and p.name.startswith("snapshot_") and (p / "buses.parquet").exists()),
+                    reverse=True,
+                )
+                if not candidates:
+                    break
+                snapshot_id = candidates[0].name
+            snapshot = Snapshot.at(bundle_root / snapshot_id)
+            features = build_n1_overlay_features(
+                ranking=ranking, snapshot=snapshot, max_features=max_features
+            )
+            write_geojson_overlay(
+                episode_id,
+                "n1_contingency",
+                features,
+                {
+                    "description": "N-1 contingency overloads",
+                    "units": "% loading",
+                    "source_table": "branches",
+                },
+                overlay_dir=overlay_dir,
+            )
+            overlays_written.append("n1_contingency.geojson")
+            total_features += len(features)
+        except Exception:
+            pass
+        break
+
+    model = os.environ.get("GRIDAGENT_LLM_MODEL", "gemma4:e12b")
+    write_provenance(
+        episode_id,
+        question=goal,
+        started_at=started_at,
+        tools_called=tools_called,
+        overlays=overlays_written,
+        model=model,
+        overlay_dir=overlay_dir,
+    )
+
+    return total_features, episode_id
+
+
 def write_n1_overlay_from_episode(
     episode_log: Path,
     out_path: Path,
@@ -94,6 +261,9 @@ def write_n1_overlay_from_episode(
     max_features: int = 40,
 ) -> int:
     """Parse ``episode_log`` and write a FeatureCollection to ``out_path``.
+
+    Legacy flat-file API kept for the CLI ``-o`` flag and backward compat.
+    New code should use ``write_episode_overlays()``.
 
     Returns the number of features written (0 if none).
     """
@@ -116,7 +286,7 @@ def write_n1_overlay_from_episode(
     snapshot_id = scenario.get("snapshot_id")
     if not snapshot_id:
         candidates = sorted(
-            (p for p in bundle_root.iterdir() if p.is_dir() and p.name.startswith("snapshot_")),
+            (p for p in bundle_root.iterdir() if p.is_dir() and p.name.startswith("snapshot_") and (p / "buses.parquet").exists()),
             reverse=True,
         )
         if not candidates:
@@ -150,8 +320,17 @@ def main(argv: list[str] | None = None) -> int:
         "-o",
         "--output",
         type=Path,
-        required=True,
-        help="Output .geojson path (e.g. platform/atlas/public/overlays/run.geojson)",
+        default=None,
+        help="Output .geojson path (flat file). Mutually exclusive with --overlay-dir.",
+    )
+    parser.add_argument(
+        "--overlay-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Write directory-per-episode layout to this dir "
+            "(recommended; use with the atlas ?episode=<id> seam)."
+        ),
     )
     parser.add_argument(
         "--bundle-root",
@@ -166,6 +345,26 @@ def main(argv: list[str] | None = None) -> int:
         help="Cap ranking rows mapped to lines (default: 40)",
     )
     args = parser.parse_args(argv)
+
+    if args.overlay_dir:
+        try:
+            n, episode_id = write_episode_overlays(
+                args.episode_log,
+                args.overlay_dir,
+                bundle_root=args.bundle_root,
+                max_features=args.max_features,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            print(exc, file=sys.stderr)
+            return 2
+        ep_dir = args.overlay_dir / episode_id
+        print(f"Wrote {n} features → {ep_dir}/  (open atlas with ?episode={episode_id})")
+        return 0
+
+    if args.output is None:
+        print("Error: provide --output or --overlay-dir", file=sys.stderr)
+        return 2
+
     try:
         n = write_n1_overlay_from_episode(
             args.episode_log,

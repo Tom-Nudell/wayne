@@ -7,6 +7,10 @@
 export { PALETTE } from './palette.js';
 export type { PaletteKey } from './palette.js';
 
-// Layer registry, paint specs, and the forked Protomaps style land here
-// in Phase 1. Until then this is a re-export shell so consumers can wire
-// imports against the eventual API surface.
+export { baseStyle } from './styles/base.js';
+export {
+  wayneLayers,
+  wayneLayerIds,
+  wayneSources,
+  type WayneSourceConfig
+} from './layers/wayne.js';

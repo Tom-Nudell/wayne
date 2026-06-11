@@ -38,7 +38,14 @@ TABLES: tuple[PudlTable, ...] = (
     ),
     PudlTable(
         name="core_eia860__scd_plants",
-        description="EIA Form 860 plant-level annual snapshot with lat/lon and BA.",
+        description="EIA Form 860 plant-level slowly-changing snapshot (BA, NERC, ISO).",
+    ),
+    PudlTable(
+        name="core_eia__entity_plants",
+        description=(
+            "EIA plant entity table — plant_name_eia, latitude, longitude, state. "
+            "This is the geometry source for the atlas plant layer."
+        ),
     ),
     PudlTable(
         name="core_eia923__monthly_generation",

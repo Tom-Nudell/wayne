@@ -84,27 +84,27 @@ def _build_warehouse(path: Path) -> None:
                     'plant-1', 'Big Solar Farm', 'plant',
                     '{"fuel": "solar", "capacity_mw": 150}',
                     ['eia860'], ['public_domain'],
-                    'POINT(-97.5 30.2)'
+                    'POINT(-97.5 30.2)', false
                 ),
                 (
                     'sub-101', 'Downtown 138kV', 'substation',
                     '{"base_kv": 138}',
                     ['rts_gmlc'], ['bsd_3_clause'],
-                    'POINT(-97.7 30.3)'
+                    'POINT(-97.7 30.3)', true
                 ),
                 (
                     'branch-A23', 'Line 101-102', 'transmission_line',
                     '{"base_kv": 138, "length_km": 22.1}',
                     ['rts_gmlc'], ['bsd_3_clause'],
-                    'LINESTRING(-97.7 30.3, -97.5 30.2)'
+                    'LINESTRING(-97.7 30.3, -97.5 30.2)', true
                 ),
                 (
                     'plant-rollup-0', 'No Location Plant', 'plant',
                     '{"fuel": "gas"}',
                     ['eia860'], ['public_domain'],
-                    NULL
+                    NULL, false
                 )
-            ) AS t(feature_id, display_name, kind, properties, sources, licenses, geometry_wkt)
+            ) AS t(feature_id, display_name, kind, properties, sources, licenses, geometry_wkt, synthetic)
             """
         )
     finally:

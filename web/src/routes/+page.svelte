@@ -11,6 +11,9 @@
     in Phase 3. See <code>grid-map-engineering-brief.md</code>
     at the repo root.
   </p>
+  <p>
+    <a href="/map" class="cta">Open the map shell →</a>
+  </p>
   <div class="palette" aria-hidden="true">
     {#each Object.entries(PALETTE) as [name, hex]}
       <span class="swatch" style="--c: {hex}" title={`${name} ${hex}`}></span>
@@ -49,5 +52,13 @@
     border-radius: 4px;
     background: var(--c);
     border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .cta {
+    color: #1c1812;
+    text-decoration: none;
+    border-bottom: 1px solid currentColor;
+  }
+  .cta:hover {
+    color: #6f8a52;
   }
 </style>

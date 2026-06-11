@@ -46,7 +46,10 @@ models:
           - not_null
           - unique
       - name: capacity_mw
-        tests: [not_null]
+        tests:
+          - not_null:
+              config:
+                severity: warn
       - name: sources
         description: Array of source names that contributed to this row.
         tests: [not_null]

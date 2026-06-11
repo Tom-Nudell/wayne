@@ -42,7 +42,8 @@ _SCRIPT: list[dict] = [
         },
     },
     # scenario_id is filled in by reading the previous tool return below.
-    {"tool": "run_n1_contingency", "args": {"executor": "pandapower"}},
+    # No executor arg: the tool hardcodes pandapower and rejects extras.
+    {"tool": "run_n1_contingency", "args": {}},
 ]
 
 
