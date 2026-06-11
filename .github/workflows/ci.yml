@@ -33,7 +33,7 @@ jobs:
       - name: Install gridagent-tools (with pandapower extra)
         run: |
           uv venv --python 3.11 platform/tools/.venv
-          uv pip install --python platform/tools/.venv/bin/python -e platform/tools --extra pandapower
+          uv pip install --python platform/tools/.venv/bin/python -e 'platform/tools[pandapower]'
 
       - name: Tools smoke test (list → query → create → N-1)
         run: platform/tools/.venv/bin/python _smoke_test.py
@@ -119,12 +119,12 @@ jobs:
       - name: Set up Python 3.11
         run: uv python install 3.11
 
-      - name: Install pydantic
-        run: uv pip install --system pydantic
-
       - name: Schema drift check
+        # ``uv run --with`` builds an ephemeral env — the runner's system
+        # Python is externally managed (PEP 668) and refuses installs.
         run: |
-          PYTHONPATH=platform/data/src python -m gridagent_data.schema.generate_ts \
+          PYTHONPATH=platform/data/src uv run --no-project --python 3.11 --with pydantic \
+            python -m gridagent_data.schema.generate_ts \
             --out shared/schema/src/index.ts --check
 
   web:
@@ -187,17 +187,29 @@ jobs:
             platform/data/.venv
           key: uv-data-qa-${{ runner.os }}-${{ hashFiles('platform/data/pyproject.toml') }}
 
-      - name: Install gridagent-data (with qa extra)
+      - name: Install gridagent-data (with dev extra)
+        # dev (not qa): the fixture builder below imports from tests/, which
+        # needs pytest on the path.
         run: |
           uv venv --python 3.11 .venv
-          uv pip install --python .venv/bin/python -e '.[qa]'
+          uv pip install --python .venv/bin/python -e '.[dev]'
 
       - name: Install Playwright browsers
         run: .venv/bin/playwright install chromium --with-deps
 
-      - name: Build RTS-GMLC test fixture bundle
+      - name: Build test fixture bundle
+        # The full dbt build needs every bronze source (PUDL, OSM, queue feed)
+        # on disk — too heavy for CI. Reuse the deterministic warehouse fixture
+        # the exporter tests already maintain, then run the real bundle export
+        # over it so the gate sees genuine exporter output.
         run: |
-          .venv/bin/python -m gridagent_data.cli ingest rts_gmlc
+          mkdir -p "$GRIDAGENT_DATA_ROOT"
+          .venv/bin/python -c "
+          from pathlib import Path
+          from tests.test_exporters import _build_warehouse
+          import os
+          _build_warehouse(Path(os.environ['GRIDAGENT_DATA_ROOT']) / 'warehouse.duckdb')
+          "
           .venv/bin/python -m gridagent_data.cli bundle \
             --warehouse "$GRIDAGENT_DATA_ROOT/warehouse.duckdb" \
             --out "$GRIDAGENT_DATA_ROOT/bundle/ci_fixture"
@@ -207,8 +219,12 @@ jobs:
       - name: Run QA gate against fixture bundle
         id: qa_gate
         run: |
+          # --skip coverage: national-coverage is a data-scale check; this run
+          # gates code against a 4-feature fixture. The real promotion gate
+          # (refresh builds) runs with no skips.
           .venv/bin/gridagent-qa-gate \
             --bundle-dir /tmp/wayne_qa_data/bundle/ci_fixture/tiles \
+            --skip coverage \
             --json > /tmp/qa_report.json || true
           cat /tmp/qa_report.json
           # Fail the build only on 'fail' status (not 'warn' — visual regression

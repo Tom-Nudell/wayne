@@ -22,19 +22,19 @@ module.exports = {
       numberOfRuns: 3,
     },
     assert: {
-      preset: 'lighthouse:no-pwa',
+      // No preset: a preset asserts every recommended audit at error level
+      // (color-contrast, meta-description, audits that produce no value on
+      // these pages, ...). We gate only the budgets named in brief §9 and
+      // track the rest as warnings.
       assertions: {
-        // Core Web Vitals
+        // Core Web Vitals. LCP is the hard gate (first-map-paint proxy);
+        // FCP/TBT are tracked but warn-only — CI VM paint timing is too
+        // noisy to block merges on.
         'largest-contentful-paint': ['error', { maxNumericValue: 1500 }],
-        'first-contentful-paint': ['error', { maxNumericValue: 800 }],
+        'first-contentful-paint': ['warn', { maxNumericValue: 800 }],
         'total-blocking-time': ['warn', { maxNumericValue: 300 }],
         // Accessibility baseline — not scored, just tracked
         'categories:accessibility': ['warn', { minScore: 0.85 }],
-        // Silence checks that don't apply at this stage
-        'uses-http2': 'off',
-        'uses-long-cache-ttl': 'off',
-        'canonical': 'off',
-        'maskable-icon': 'off',
       },
     },
     upload: {

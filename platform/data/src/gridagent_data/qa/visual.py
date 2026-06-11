@@ -38,14 +38,12 @@ regular CI (which doesn't install qa extras) is not blocked.
 
 from __future__ import annotations
 
-import io
 import threading
 import time
 import urllib.parse
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-from gridagent_data.qa.baseline import approve_baseline as _approve_baseline
 from gridagent_data.qa.baseline import baseline_approved, screenshots_dir
 from gridagent_data.qa.models import CheckResult
 
