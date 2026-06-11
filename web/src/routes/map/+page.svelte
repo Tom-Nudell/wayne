@@ -34,6 +34,7 @@
   let studyRunning = $state(false);
   let studyOpen = $state(false);
   let overlayUrl = $state<string | null>(null);
+  let studyAbort: AbortController | null = null;
 
   async function startStudy(feature: StudyFeatureRef) {
     if (studyRunning) return;
@@ -41,19 +42,30 @@
     overlayUrl = null;
     studyOpen = true;
     studyRunning = true;
+    studyAbort = new AbortController();
     try {
-      await runStudy({ fromFeature: feature }, (event) => {
-        studyEvents = [...studyEvents, event];
-        if (event.event === 'overlay') {
-          overlayUrl = event.overlay_url;
-        }
-      });
+      await runStudy(
+        { fromFeature: feature },
+        (event) => {
+          studyEvents = [...studyEvents, event];
+          if (event.event === 'overlay') {
+            overlayUrl = event.overlay_url;
+          }
+        },
+        studyAbort.signal
+      );
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) throw err;
     } finally {
       studyRunning = false;
+      studyAbort = null;
     }
   }
 
   function closeStudy() {
+    // Aborting the fetch closes the NDJSON stream; the server kills the
+    // orchestrator subprocess on cancel, so no orphaned runs pile up.
+    studyAbort?.abort();
     studyOpen = false;
     overlayUrl = null;
   }

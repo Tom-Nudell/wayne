@@ -72,13 +72,45 @@ def run_episode(
     ``Episode.on_event``); ``emit`` carries the human-facing side notes
     (overlay paths). Pass a no-op emit when stdout must stay machine-clean.
     """
+    from pydantic_ai.exceptions import UsageLimitExceeded
+    from pydantic_ai.usage import UsageLimits
+
     episode = Episode.new(goal=goal, root=_episode_root(), on_event=on_event)
     deps = OrchestratorDeps(verifier=verifier or Verifier.default(), episode=episode)
     agent = make_agent(model=model, base_url=base_url)
 
+    # Hard ceiling on model requests so a looping planner produces a bounded
+    # run instead of an open-ended one. A clean playbook run takes well under
+    # ten requests; small local models have been observed re-running the
+    # whole playbook indefinitely instead of summarising.
+    request_limit = int(os.environ.get("GRIDAGENT_MAX_REQUESTS", "25"))
+
     try:
-        result = agent.run_sync(_user_prompt(goal), deps=deps)
+        result = agent.run_sync(
+            _user_prompt(goal),
+            deps=deps,
+            usage_limits=UsageLimits(request_limit=request_limit),
+        )
         episode.finish(summary=str(result.output))
+    except UsageLimitExceeded:
+        # The study work is usually already done (see the episode log);
+        # finish with what the last successful N-1 step found so the
+        # overlay export below still runs.
+        n1_steps = [s for s in episode.steps if s.tool == "run_n1_contingency"]
+        if n1_steps:
+            sig = n1_steps[-1].signal
+            episode.finish(
+                summary=(
+                    f"Stopped at the {request_limit}-request limit before the planner "
+                    f"summarised. Last N-1 screen: {sig.get('n_overloads')} overloads "
+                    f"across {sig.get('n_screened')} screened outages; worst loading "
+                    f"{sig.get('worst_loading_pct')}%."
+                )
+            )
+        else:
+            episode.finish(
+                summary=f"Stopped at the {request_limit}-request limit before any N-1 screen completed."
+            )
     except RuntimeError as exc:
         # Verifier ABORT or unrecoverable model retry exhaustion.
         episode.finish(summary=f"Aborted: {exc}")
