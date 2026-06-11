@@ -1,6 +1,10 @@
 <script lang="ts">
+  import { env } from '$env/dynamic/public';
   import MapLibreMap from '$lib/map/MapLibreMap.svelte';
+  import StudyPanel from '$lib/study/StudyPanel.svelte';
+  import { runStudy } from '$lib/study/client';
   import { wayneLayerIds } from '@wayne/map';
+  import type { StudyEvent, StudyFeatureRef } from '@wayne/api';
 
   // Display order + label + indicator color for each layer. Colors are
   // representative swatches drawn from the layer paint, not exact paint
@@ -20,6 +24,51 @@
     else next.add(id);
     visible = next;
   }
+
+  // --- Wayne agent (testability track, dev-flagged) ---------------------
+  // Brief §16: behind PUBLIC_WAYNE_AGENT=1 the map can launch an
+  // orchestrator study and watch it live. Never set in production.
+  const agentEnabled = env.PUBLIC_WAYNE_AGENT === '1';
+
+  let studyEvents = $state<StudyEvent[]>([]);
+  let studyRunning = $state(false);
+  let studyOpen = $state(false);
+  let overlayUrl = $state<string | null>(null);
+  let studyAbort: AbortController | null = null;
+
+  async function startStudy(feature: StudyFeatureRef) {
+    if (studyRunning) return;
+    studyEvents = [];
+    overlayUrl = null;
+    studyOpen = true;
+    studyRunning = true;
+    studyAbort = new AbortController();
+    try {
+      await runStudy(
+        { fromFeature: feature },
+        (event) => {
+          studyEvents = [...studyEvents, event];
+          if (event.event === 'overlay') {
+            overlayUrl = event.overlay_url;
+          }
+        },
+        studyAbort.signal
+      );
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) throw err;
+    } finally {
+      studyRunning = false;
+      studyAbort = null;
+    }
+  }
+
+  function closeStudy() {
+    // Aborting the fetch closes the NDJSON stream; the server kills the
+    // orchestrator subprocess on cancel, so no orphaned runs pile up.
+    studyAbort?.abort();
+    studyOpen = false;
+    overlayUrl = null;
+  }
 </script>
 
 <svelte:head>
@@ -27,7 +76,15 @@
 </svelte:head>
 
 <div class="map-shell">
-  <MapLibreMap visibleLayers={visible} />
+  <MapLibreMap
+    visibleLayers={visible}
+    onRunStudy={agentEnabled ? startStudy : undefined}
+    studyOverlayUrl={overlayUrl}
+  />
+
+  {#if studyOpen}
+    <StudyPanel events={studyEvents} running={studyRunning} onClose={closeStudy} />
+  {/if}
 
   <aside class="panel" aria-label="Layer controls">
     <h2>Layers</h2>

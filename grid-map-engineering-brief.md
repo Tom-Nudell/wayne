@@ -38,7 +38,7 @@ Inspirational reference: [opengridworks.com](https://opengridworks.com/) — sam
 - Real-time generation telemetry (separate compliance scope)
 - User-uploaded layers (trust + abuse problem)
 - Mobile apps
-- "Run a study from the map" — surfacing `platform/orchestrator/` runs as a Pro feature is post-launch
+- "Run a study from the map" **as a customer-facing Pro feature** — productizing it stays post-launch (§16 Phase 4). A dev-flagged internal version exists for testability (see the Testability track in §16): behind `PUBLIC_WAYNE_AGENT=1`, the map can launch an orchestrator study and render its overlay. The flag is never set in production; nothing agent-related ships in the customer bundle path.
 
 ---
 
@@ -112,7 +112,9 @@ Inspirational reference: [opengridworks.com](https://opengridworks.com/) — sam
 
   Internal (not customer-facing):
     platform/atlas    — agent dev viewer; renders orchestrator overlays
-    platform/app      — local FastAPI surface for dev (optional)
+    platform/app      — superseded: the dev bridge to the orchestrator is a
+                        SvelteKit route (web/ /api/study, dev-flagged), not a
+                        separate FastAPI deployable
 ```
 
 For the full monorepo layout and "where does this code live?" decisions, see [`docs/MONOREPO.md`](docs/MONOREPO.md).
@@ -432,6 +434,21 @@ When this brief and `docs/MONOREPO.md` disagree, MONOREPO.md wins; update this b
 - Free tier shipped, no auth, no billing.
 - Hard target: < 1.5s first map paint, < 250 KB JS gzipped.
 
+**Testability track (parallel to Phase 1, not launch scope)**
+The platform must be exercisable end-to-end while Phases 1–3 are built, so two
+dev-facing capabilities run ahead of the product schedule:
+- **Live agent CLI** — `gridagent-orchestrator` streams the episode event log
+  (tool calls, supervisory signals, verifier verdicts) as a rich live panel;
+  `--stream-events` emits the same events as JSON lines for machine consumers;
+  `--from-substation` templates the canonical N-1 study goal.
+- **Dev-flagged map loop** — behind `PUBLIC_WAYNE_AGENT=1`, `web/` exposes
+  `POST /api/study` (SSE): it spawns the orchestrator in `--stream-events`
+  mode, streams the episode live into a study panel on `/map`, and renders the
+  resulting N-1 overlay GeoJSON in the reserved alarm colors. This is the
+  **internal precursor** of the Phase 4 agent seam below — same event
+  vocabulary, same overlay exporter — not a customer surface. The flag is
+  never set in production; the endpoint 404s without it.
+
 **Phase 2 — Auth, billing, Pro tier (Weeks 7–10)**
 - SvelteKit + Clerk integration spike in week 1; bail to Better Auth if friction is worse than budget.
 - Stripe Checkout + Portal.
@@ -449,7 +466,7 @@ When this brief and `docs/MONOREPO.md` disagree, MONOREPO.md wins; update this b
 - SSO/SAML via Clerk.
 - API access with per-customer rate limits and audit log.
 - Point-in-time API queries.
-- **Agent seam:** surface `platform/orchestrator/` runs as a Pro feature ("explore an N-1 study from this substation"). Existing `overlay_export.py` produces the GeoJSON; web wraps it as a Pro flow.
+- **Agent seam:** surface `platform/orchestrator/` runs as a Pro feature ("explore an N-1 study from this substation"). Existing `overlay_export.py` produces the GeoJSON; web wraps it as a Pro flow. The dev-flagged testability loop (see Testability track above) is the working prototype: productizing means auth/tier gating, queueing, and rate limits on the same `/api/study` contract — not new plumbing.
 - Submarine cables (TeleGeography commercial license).
 - International expansion (GEM, OSM global).
 
