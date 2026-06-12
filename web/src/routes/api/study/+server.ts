@@ -35,18 +35,31 @@ function orchestratorPython(root: string): string {
   return path.join(root, 'platform', 'orchestrator', '.venv', 'bin', 'python');
 }
 
-function goalFrom(body: StudyRequest): string | null {
-  if (body.goal && body.goal.trim()) return body.goal.trim();
+// CLI arguments for the run. The canonical map-click N-1 runs the learned
+// n1_contingency workflow — fixed steps, zero planner round-trips (see
+// wayne-workflows-brief.md §4). Free-form goals still take the agent path.
+function studyArgs(body: StudyRequest, overlayDir: string): string[] | null {
+  const common = ['-m', 'gridagent_orchestrator.run', '--stream-events'];
+  // The body is an unvalidated cast — coerce defensively so a malformed
+  // request can't 500 the route or persist junk into scenario names.
+  if (typeof body.goal === 'string' && body.goal.trim()) {
+    return [...common, '--goal', body.goal.trim(), '--atlas-overlay-dir', overlayDir];
+  }
   const f = body.fromFeature;
-  if (!f) return null;
-  // Same canonical intent as the CLI's --from-substation (run.py
-  // goal_from_substation); keep the texts aligned.
-  const label = f.name ? `${f.name} (${f.feature_id})` : f.feature_id;
-  return (
-    `Load the newest data snapshot, create a baseline scenario, and run ` +
-    `an N-1 contingency screen focused on the network around ${f.kind} ` +
-    `'${label}'. Summarise the worst overload and name the branches involved.`
-  );
+  if (!f || typeof f !== 'object' || typeof f.feature_id !== 'string') return null;
+  const name = typeof f.name === 'string' ? f.name : '';
+  const kind = typeof f.kind === 'string' ? f.kind : 'feature';
+  const label = name ? `${name} (${f.feature_id})` : f.feature_id;
+  const inputs = { scenario_name: `N-1 near ${kind} ${label}` };
+  return [
+    ...common,
+    '--workflow',
+    'n1_contingency',
+    '--inputs',
+    JSON.stringify(inputs),
+    '--atlas-overlay-dir',
+    overlayDir
+  ];
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -54,10 +67,11 @@ export const POST: RequestHandler = async ({ request }) => {
     throw error(404, 'Not found');
   }
 
-  const body = (await request.json()) as StudyRequest;
-  const goal = goalFrom(body);
-  if (!goal) {
-    throw error(400, 'goal or fromFeature required');
+  let body: StudyRequest;
+  try {
+    body = (await request.json()) as StudyRequest;
+  } catch {
+    throw error(400, 'request body must be JSON');
   }
 
   const root = repoRoot();
@@ -69,17 +83,14 @@ export const POST: RequestHandler = async ({ request }) => {
   // Overlays land in web/static so the dev server serves them at /overlays/.
   const overlayDir = path.join(root, 'web', 'static', 'overlays');
 
+  const args = studyArgs(body, overlayDir);
+  if (!args) {
+    throw error(400, 'goal or fromFeature required');
+  }
+
   const child = spawn(
     python,
-    [
-      '-m',
-      'gridagent_orchestrator.run',
-      '--stream-events',
-      '--goal',
-      goal,
-      '--atlas-overlay-dir',
-      overlayDir
-    ],
+    args,
     {
       cwd: root,
       env: {
@@ -162,11 +173,11 @@ export const POST: RequestHandler = async ({ request }) => {
         }
       };
 
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
         if (code !== 0) {
           send({
             event: 'error',
-            message: `orchestrator exited with code ${code}: ${stderrTail.trim()}`
+            message: `orchestrator exited with ${code === null ? `signal ${signal}` : `code ${code}`}: ${stderrTail.trim()}`
           });
         }
         finish();

@@ -1,0 +1,51 @@
+# The canonical N-1 contingency screen — the planner playbook from
+# planner._INSTRUCTIONS frozen into a workflow. The map's "Run N-1 study
+# from here" button and the CLI's --from-substation both run this spec;
+# free-form goals still take the agent path.
+workflow: n1_contingency
+description: >-
+  N-1 contingency screen on the newest snapshot: build a scenario from the
+  given change-table (baseline by default) and rank post-contingency
+  overloads with a DC LODF screen.
+
+goal: >-
+  Run the learned N-1 contingency workflow for "{inputs.scenario_name}":
+  newest snapshot, DC LODF screen, worst overloads drawn on the map.
+
+inputs:
+  scenario_name:
+    default: N-1 baseline
+  change_table:
+    default: {}
+
+nodes:
+  # Orientation: pin the snapshot every later node binds to.
+  - id: snapshot
+    tool: list_data_snapshots
+
+  # Sanity read of the branches table — same role as playbook STEP 2:
+  # fail fast (and escalate with context) if the snapshot is unreadable.
+  - id: branches
+    tool: query_grid
+    bind:
+      table: branches
+      snapshot_id: $snapshot.latest
+      limit: 50
+
+  - id: scenario
+    tool: create_scenario
+    bind:
+      name: $inputs.scenario_name
+      change_table: $inputs.change_table
+      snapshot_id: $snapshot.latest
+
+  - id: n1
+    tool: run_n1_contingency
+    bind:
+      scenario_id: $scenario.scenario_id
+
+summary: >-
+  N-1 screen on {snapshot.latest}: {n1.n_overloads} overload(s) across
+  {n1.n_screened} screened outages, {n1.n_islanding} islanding outage(s).
+  Worst: {n1.worst.monitored} at {n1.worst_loading_pct}% loading when
+  {n1.worst.outage} is out.

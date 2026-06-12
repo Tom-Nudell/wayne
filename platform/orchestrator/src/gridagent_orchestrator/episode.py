@@ -28,6 +28,9 @@ class EpisodeStep:
     signal: dict[str, Any]
     decision: Decision
     attempt: int = 1
+    # Workflow node ID when this step was executed by a fixed workflow
+    # (workflow.py) rather than chosen by the planner. None on agent steps.
+    node: str | None = None
     ts: float = field(default_factory=time.time)
 
 
@@ -56,6 +59,10 @@ class Episode:
         rec["decision"] = step.decision.value
         rec["event"] = "step"
         self._append(rec)
+
+    def append_record(self, record: dict[str, Any]) -> None:
+        """Append a non-step event (workflow plan, escalation) to the log."""
+        self._append(record)
 
     def finish(self, summary: str) -> None:
         self._append({"event": "finish", "summary": summary, "ts": time.time()})
