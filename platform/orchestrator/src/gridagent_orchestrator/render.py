@@ -63,9 +63,11 @@ class RichRenderer:
     def __init__(self, console: Console | None = None) -> None:
         self.console = console or Console()
         self._steps: list[dict[str, Any]] = []
+        self._notes: list[str] = []
         self._goal: str = ""
         self._episode_id: str = ""
         self._summary: str | None = None
+        self._workflow: bool = False
         self._live: Live | None = None
 
     # -- context manager ----------------------------------------------------
@@ -93,8 +95,20 @@ class RichRenderer:
         if event == "start":
             self._goal = str(record.get("goal", ""))
             self._episode_id = str(record.get("episode_id", ""))
+        elif event == "workflow":
+            nodes = record.get("nodes") or []
+            self._notes.append(
+                f"workflow {record.get('workflow')}: "
+                + " → ".join(str(n.get("tool", "?")) for n in nodes)
+            )
+            self._workflow = True
         elif event == "step":
             self._steps.append(record)
+        elif event == "escalate":
+            self._notes.append(
+                f"escalating to agent at node {record.get('node')}: {record.get('reason')}"
+            )
+            self._workflow = False
         elif event == "finish":
             self._summary = str(record.get("summary", ""))
         if self._live is not None:
@@ -125,9 +139,12 @@ class RichRenderer:
                 verdict,
             )
 
-        body: list[Any] = [table] if self._steps else []
+        body: list[Any] = [Text(n, style="dim italic") for n in self._notes]
+        if self._steps:
+            body.append(table)
         if self._summary is None:
-            body.append(Spinner("dots", text=Text(" planner thinking…", style="dim")))
+            spinner_text = " running workflow…" if self._workflow else " planner thinking…"
+            body.append(Spinner("dots", text=Text(spinner_text, style="dim")))
         else:
             body.append(
                 Panel(self._summary, title="summary", border_style="green", expand=False)

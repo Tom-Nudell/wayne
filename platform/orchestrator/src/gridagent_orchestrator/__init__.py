@@ -8,8 +8,9 @@ agent loop.
 
 from .episode import Episode, EpisodeStep
 from .planner import OrchestratorDeps, make_agent
-from .run import run_episode
+from .run import run_episode, run_workflow_episode
 from .verifier import Decision, Verifier
+from .workflow import WorkflowSpec, list_workflows, load_workflow, run_workflow
 
 __all__ = [
     "Decision",
@@ -17,6 +18,11 @@ __all__ = [
     "EpisodeStep",
     "OrchestratorDeps",
     "Verifier",
+    "WorkflowSpec",
+    "list_workflows",
+    "load_workflow",
     "make_agent",
     "run_episode",
+    "run_workflow",
+    "run_workflow_episode",
 ]
