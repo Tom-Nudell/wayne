@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { StudyEvent } from '@wayne/api';
 
+  type StepEvent = Extract<StudyEvent, { event: 'step' }>;
+  type WorkflowEvent = Extract<StudyEvent, { event: 'workflow' }>;
+  type EscalateEvent = Extract<StudyEvent, { event: 'escalate' }>;
+
   interface Props {
     events: readonly StudyEvent[];
     running: boolean;
@@ -9,11 +13,58 @@
 
   const { events, running, onClose }: Props = $props();
 
-  const steps = $derived(events.filter((e) => e.event === 'step'));
+  const steps = $derived(events.filter((e): e is StepEvent => e.event === 'step'));
+  const workflow = $derived(events.find((e): e is WorkflowEvent => e.event === 'workflow'));
+  const escalation = $derived(events.find((e): e is EscalateEvent => e.event === 'escalate'));
   const finish = $derived(events.find((e) => e.event === 'finish'));
   const errors = $derived(events.filter((e) => e.event === 'error'));
   const overlay = $derived(events.find((e) => e.event === 'overlay'));
   const start = $derived(events.find((e) => e.event === 'start'));
+
+  // Steps the planner chose itself — everything in a non-workflow run, or
+  // the post-escalation tail of a workflow run.
+  const agentSteps = $derived(steps.filter((s) => !s.node));
+
+  function nodeSteps(id: string): StepEvent[] {
+    return steps.filter((s) => s.node === id);
+  }
+
+  // A workflow announces its full plan before anything runs, so every node
+  // renders immediately and ticks through states as steps arrive. This is
+  // the trust payoff of fixed workflows: the plan is visible up front,
+  // deterministic steps are marked apart from model-chosen ones.
+  type NodeState =
+    | 'pending'
+    | 'active'
+    | 'done'
+    | 'retrying'
+    | 'escalated'
+    | 'aborted'
+    | 'skipped';
+
+  function nodeState(id: string): NodeState {
+    const last = nodeSteps(id).at(-1);
+    if (last) {
+      if (last.decision === 'advance') return 'done';
+      if (last.decision === 'abort') return 'aborted';
+      if (last.decision === 'retry') return running && !escalation ? 'retrying' : 'escalated';
+      return 'escalated';
+    }
+    if (escalation || finish || errors.length > 0) return 'skipped';
+    if (!workflow || !running) return 'pending';
+    const firstIdle = workflow.nodes.find((n) => nodeSteps(n.id).length === 0);
+    return firstIdle?.id === id ? 'active' : 'pending';
+  }
+
+  const NODE_BADGE: Record<NodeState, string> = {
+    pending: '·',
+    active: '◌',
+    done: '✓',
+    retrying: '↻',
+    escalated: '⚠',
+    aborted: '✕',
+    skipped: '—'
+  };
 
   function signalSummary(signal: Record<string, unknown>): string {
     return Object.entries(signal)
@@ -40,20 +91,44 @@
     <p class="goal">{start.goal}</p>
   {/if}
 
-  <ol>
-    {#each steps as step (step.event === 'step' ? step.step : 0)}
-      {#if step.event === 'step'}
+  {#if workflow}
+    <p class="wf-name">workflow · {workflow.workflow}</p>
+    <ol class="nodes">
+      {#each workflow.nodes as node (node.id)}
+        {@const state = nodeState(node.id)}
+        {@const ns = nodeSteps(node.id)}
+        {@const last = ns.at(-1)}
+        <li class="node-{state}">
+          <span class="badge" aria-hidden="true">{NODE_BADGE[state]}</span>
+          <span class="tool">{node.tool}</span>
+          <span class="signal">{last ? signalSummary(last.signal) : ''}</span>
+          <span class="state">{state}{ns.length > 1 ? ` ×${ns.length}` : ''}</span>
+        </li>
+      {/each}
+    </ol>
+    {#if escalation}
+      <p class="escalate">
+        workflow escalated at <strong>{escalation.node}</strong> — agent takes over
+      </p>
+    {/if}
+  {/if}
+
+  {#if (!workflow || escalation) && agentSteps.length > 0}
+    <ol class="agent-steps">
+      {#each agentSteps as step (step.step)}
         <li class="verdict-{step.decision}">
           <span class="tool">{step.tool}</span>
           <span class="signal">{signalSummary(step.signal)}</span>
           <span class="verdict">{step.decision}{step.attempt > 1 ? ` ×${step.attempt}` : ''}</span>
         </li>
-      {/if}
-    {/each}
-  </ol>
+      {/each}
+    </ol>
+  {/if}
 
   {#if running && !finish}
-    <p class="thinking">planner thinking…</p>
+    <p class="thinking">
+      {workflow && !escalation ? 'running workflow…' : 'planner thinking…'}
+    </p>
   {/if}
 
   {#if finish && finish.event === 'finish'}
@@ -151,6 +226,15 @@
     color: #3b3228;
   }
 
+  .wf-name {
+    margin: 8px 0 2px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b5d4a;
+  }
+
   ol {
     list-style: none;
     margin: 0;
@@ -159,11 +243,23 @@
 
   li {
     display: grid;
-    grid-template-columns: auto 1fr auto;
     gap: 8px;
     padding: 4px 0;
     border-top: 1px solid rgba(28, 24, 18, 0.08);
     align-items: baseline;
+  }
+
+  .nodes li {
+    grid-template-columns: 14px auto 1fr auto;
+  }
+
+  .agent-steps li {
+    grid-template-columns: auto 1fr auto;
+  }
+
+  .badge {
+    text-align: center;
+    font-weight: 700;
   }
 
   .tool {
@@ -179,7 +275,8 @@
     white-space: nowrap;
   }
 
-  .verdict {
+  .verdict,
+  .state {
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -187,7 +284,35 @@
   }
 
   /* Alarm colors are earned: green advances quietly, yellow re-plans,
-     red ends the run — mirrors the CLI renderer. */
+     red ends the run — mirrors the CLI renderer. Pending/skipped nodes
+     stay muted so the eye lands on what's happening now. */
+  .node-pending,
+  .node-skipped {
+    opacity: 0.45;
+  }
+
+  .node-active .badge,
+  .node-active .state {
+    color: #6f8a52;
+  }
+
+  .node-done .badge,
+  .node-done .state {
+    color: #3aa17a;
+  }
+
+  .node-retrying .badge,
+  .node-retrying .state,
+  .node-escalated .badge,
+  .node-escalated .state {
+    color: #b07d2b;
+  }
+
+  .node-aborted .badge,
+  .node-aborted .state {
+    color: #c0392b;
+  }
+
   .verdict-advance .verdict {
     color: #3aa17a;
   }
@@ -197,6 +322,14 @@
   }
   .verdict-abort .verdict {
     color: #c0392b;
+  }
+
+  .escalate {
+    margin: 6px 0 0;
+    padding: 4px 6px;
+    border-left: 2px solid #b07d2b;
+    color: #7a5a20;
+    font-size: 0.7rem;
   }
 
   .thinking {
