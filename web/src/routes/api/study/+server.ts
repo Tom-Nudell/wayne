@@ -88,22 +88,18 @@ export const POST: RequestHandler = async ({ request }) => {
     throw error(400, 'goal or fromFeature required');
   }
 
-  const child = spawn(
-    python,
-    args,
-    {
-      cwd: root,
-      env: {
-        ...process.env,
-        GRIDAGENT_DATA_ROOT: privateEnv.GRIDAGENT_DATA_ROOT ?? path.join(root, 'data_root'),
-        GRIDAGENT_SCENARIO_ROOT:
-          privateEnv.GRIDAGENT_SCENARIO_ROOT ?? path.join(root, 'data_root', 'scenarios'),
-        GRIDAGENT_EPISODE_ROOT:
-          privateEnv.GRIDAGENT_EPISODE_ROOT ?? path.join(root, 'data_root', 'episodes')
-      },
-      stdio: ['ignore', 'pipe', 'pipe']
-    }
-  );
+  const child = spawn(python, args, {
+    cwd: root,
+    env: {
+      ...process.env,
+      GRIDAGENT_DATA_ROOT: privateEnv.GRIDAGENT_DATA_ROOT ?? path.join(root, 'data_root'),
+      GRIDAGENT_SCENARIO_ROOT:
+        privateEnv.GRIDAGENT_SCENARIO_ROOT ?? path.join(root, 'data_root', 'scenarios'),
+      GRIDAGENT_EPISODE_ROOT:
+        privateEnv.GRIDAGENT_EPISODE_ROOT ?? path.join(root, 'data_root', 'episodes')
+    },
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
 
   const encoder = new TextEncoder();
 

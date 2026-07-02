@@ -33,14 +33,7 @@
   // renders immediately and ticks through states as steps arrive. This is
   // the trust payoff of fixed workflows: the plan is visible up front,
   // deterministic steps are marked apart from model-chosen ones.
-  type NodeState =
-    | 'pending'
-    | 'active'
-    | 'done'
-    | 'retrying'
-    | 'escalated'
-    | 'aborted'
-    | 'skipped';
+  type NodeState = 'pending' | 'active' | 'done' | 'retrying' | 'escalated' | 'aborted' | 'skipped';
 
   function nodeState(id: string): NodeState {
     const last = nodeSteps(id).at(-1);
