@@ -74,7 +74,11 @@ export interface ExportJob {
 export interface StudyRequest {
   /** Free-form study goal. Mutually exclusive with fromFeature. */
   readonly goal?: string;
-  /** Map-click shorthand: run the canonical N-1 screen around this feature. */
+  /**
+   * Map-click shorthand: run the canonical N-1 workflow. The feature labels
+   * the scenario; the screen itself is grid-wide (locational scoping is
+   * Phase 2 parameter-extraction work — see wayne-workflows-brief.md §8 Q4).
+   */
   readonly fromFeature?: StudyFeatureRef;
 }
 
@@ -89,11 +93,21 @@ export interface StudyFeatureRef {
 // One line of the study stream. Mirrors the orchestrator's episode JSONL
 // (gridagent_orchestrator.episode) plus the 'overlay' record run.py emits
 // and an 'error' record the bridge adds when the subprocess dies.
+// 'workflow' / 'escalate' come from the fixed-workflow runner
+// (gridagent_orchestrator.workflow): the full node plan is announced up
+// front, and 'escalate' marks the hand-over to the planner when a node
+// fails verification.
 export type StudyEvent =
   | {
       readonly event: "start";
       readonly episode_id: string;
       readonly goal: string;
+      readonly ts: number;
+    }
+  | {
+      readonly event: "workflow";
+      readonly workflow: string;
+      readonly nodes: ReadonlyArray<{ readonly id: string; readonly tool: string }>;
       readonly ts: number;
     }
   | {
@@ -105,6 +119,14 @@ export type StudyEvent =
       readonly signal: Readonly<Record<string, unknown>>;
       readonly decision: "advance" | "retry" | "replan" | "abort";
       readonly attempt: number;
+      /** Workflow node ID; null/absent on planner-chosen (agent) steps. */
+      readonly node?: string | null;
+      readonly ts: number;
+    }
+  | {
+      readonly event: "escalate";
+      readonly node: string;
+      readonly reason: string;
       readonly ts: number;
     }
   | {

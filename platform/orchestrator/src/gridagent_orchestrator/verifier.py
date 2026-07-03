@@ -22,6 +22,15 @@ SignalRule = Callable[[dict[str, Any], int], Decision]
 """(signal, attempt) -> Decision. ``attempt`` is 1-indexed retry count."""
 
 
+def _snapshots_rule(signal: dict[str, Any], attempt: int) -> Decision:
+    # An empty data root is an operational fault, not a planning problem —
+    # neither a retry nor the agent can conjure snapshots. Without this,
+    # a workflow run escalates to the LLM and burns requests going nowhere.
+    if signal.get("count", 0) == 0:
+        return Decision.ABORT
+    return Decision.ADVANCE
+
+
 def _power_flow_rule(signal: dict[str, Any], attempt: int) -> Decision:
     if signal.get("converged"):
         return Decision.ADVANCE
@@ -63,6 +72,7 @@ class Verifier:
     def default(cls) -> "Verifier":
         return cls(
             rules={
+                "list_data_snapshots": _snapshots_rule,
                 "run_power_flow": _power_flow_rule,
                 "run_n1_contingency": _n1_rule,
                 "run_production_cost": _pcm_rule,

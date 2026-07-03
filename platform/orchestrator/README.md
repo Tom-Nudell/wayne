@@ -73,6 +73,19 @@ a head-to-head benchmark — they are not the default.
 
 ## Run
 
+Known studies run as **fixed workflows** — declarative tool sequences in
+`src/gridagent_orchestrator/workflows/` executed with zero model requests
+(no Ollama needed). The verifier still gates every step; a failed node
+escalates to the agent:
+
+```bash
+uv run gridagent-orchestrator --workflow n1_contingency
+uv run gridagent-orchestrator --workflow n1_contingency \
+  --inputs '{"scenario_name": "my scenario", "change_table": {"scale_load": 1.2}}'
+```
+
+Free-form goals take the agent path (LLM planner over the same tools):
+
 ```bash
 ollama pull gemma4:e12b   # one-time, ~8 GB
 

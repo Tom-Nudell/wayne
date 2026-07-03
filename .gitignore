@@ -17,6 +17,10 @@ dist/
 build/
 .wrangler/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Per-package virtualenvs
 */.venv/
 .venv/
@@ -24,3 +28,4 @@ build/
 # uv lockfiles regenerated locally
 uv.lock
 .gstack/
+data_root/bundle/snapshot_latest/
