@@ -17,6 +17,10 @@ dist/
 build/
 .wrangler/
 
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Per-package virtualenvs
 */.venv/
 .venv/
