@@ -10,6 +10,8 @@ Subcommands:
 * ``ingest osm``             — OSM ``power=*`` Overpass query for a region → bronze.
 * ``ingest pypsa_usa PATH``  — adopt a pre-built ``elec.nc`` into bronze.
 * ``ingest afdc``            — NREL AFDC EV charging stations → bronze.
+* ``ingest usgs``            — USGS USWTDB turbines + USPVDB PV facilities → bronze.
+* ``ingest open_meteo``      — Open-Meteo hourly forecasts at ISO load centers → bronze.
 * ``snapshot rts``           — assemble a Snapshot bundle from RTS-GMLC bronze.
 * ``dbt <subcommand>``       — run dbt against the in-tree project.
 * ``bundle [atlas-public]``  — export warehouse → ``bundle.duckdb`` + PMTiles +
@@ -77,6 +79,7 @@ def cmd_refresh_daily(
     include_gridstatus: bool = True,
     include_osm: bool = True,
     include_queue_feed: bool = True,
+    include_weather: bool = True,
 ) -> int:
     """Daily refresh for atlas-facing data.
 
@@ -140,6 +143,19 @@ def cmd_refresh_daily(
             print(f"  ! queue_feed: skipped ({exc})", file=sys.stderr)
     else:
         print("Skipping queue feed ingest (--no-queue-feed).")
+
+    if include_weather:
+        print("Refreshing Open-Meteo forecasts (ISO load-center points).")
+        from gridagent_data.sources.open_meteo import FORECAST_POINTS, fetch_forecast
+
+        for point in FORECAST_POINTS:
+            try:
+                m = fetch_forecast(point)
+                print(f"  · Open-Meteo {point.name}: {m['n_hours']} hours → {m['path']}")
+            except Exception as exc:
+                print(f"  ! Open-Meteo {point.name}: skipped ({exc})", file=sys.stderr)
+    else:
+        print("Skipping Open-Meteo ingest (--no-weather).")
 
     rc = cmd_dbt("run", [])
     if rc != 0:
@@ -208,6 +224,43 @@ def cmd_ingest_afdc(api_key: str | None = None) -> int:
     print("Fetching AFDC EV charging stations…")
     m = fetch_ev_stations(api_key=api_key)
     print(f"  · {m.station_count:,} stations → {m.path}")
+    return 0
+
+
+def cmd_ingest_usgs(dataset_name: str | None = None) -> int:
+    from gridagent_data.sources.usgs import DATASETS, fetch_dataset
+
+    selected = (
+        [d for d in DATASETS if d.name == dataset_name] if dataset_name else list(DATASETS)
+    )
+    if not selected:
+        print(f"Unknown USGS dataset '{dataset_name}'. Known: {[d.name for d in DATASETS]}")
+        return 2
+    for dataset in selected:
+        m = fetch_dataset(dataset)
+        print(
+            f"USGS {dataset.name}: {m['feature_count']:,} features "
+            f"({m['dropped_no_coords']} without coords) → {m['path']}"
+        )
+    return 0
+
+
+def cmd_ingest_open_meteo(point_name: str | None = None) -> int:
+    from gridagent_data.sources.open_meteo import FORECAST_POINTS, fetch_forecast
+
+    selected = (
+        [p for p in FORECAST_POINTS if p.name == point_name]
+        if point_name
+        else list(FORECAST_POINTS)
+    )
+    if not selected:
+        print(
+            f"Unknown forecast point '{point_name}'. Known: {[p.name for p in FORECAST_POINTS]}"
+        )
+        return 2
+    for point in selected:
+        m = fetch_forecast(point)
+        print(f"Open-Meteo {point.name}: {m['n_hours']} hours → {m['path']}")
     return 0
 
 
@@ -375,7 +428,10 @@ def main(argv: list[str] | None = None) -> int:
     ing = sub.add_parser("ingest", help="Pull a source into bronze.")
     ing.add_argument(
         "source",
-        choices=["pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm", "pypsa_usa", "queue_feed", "afdc"],
+        choices=[
+            "pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm",
+            "pypsa_usa", "queue_feed", "afdc", "usgs", "open_meteo",
+        ],
     )
     ing.add_argument("path", nargs="?", help="Source path / URL (for pypsa_usa).")
     ing.add_argument("--iso", default="ercot", help="ISO code (gridstatus only).")
@@ -482,6 +538,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Skip queue feed ingest and only rebuild/export from existing bronze data.",
     )
     ref.add_argument(
+        "--no-weather",
+        action="store_true",
+        help="Skip Open-Meteo forecast ingest.",
+    )
+    ref.add_argument(
         "--warehouse",
         default=str(WAREHOUSE),
         help="Path to warehouse.duckdb (dbt target).",
@@ -518,6 +579,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ingest_queue_feed(args.path)
     if args.cmd == "ingest" and args.source == "afdc":
         return cmd_ingest_afdc(getattr(args, "api_key", None))
+    if args.cmd == "ingest" and args.source == "usgs":
+        return cmd_ingest_usgs(args.path)
+    if args.cmd == "ingest" and args.source == "open_meteo":
+        return cmd_ingest_open_meteo(args.path)
     if args.cmd == "qa" and args.qa_action == "screenshot":
         return cmd_qa_screenshot(args.bundle_dir, args.out_dir)
     if args.cmd == "qa" and args.qa_action == "approve-baseline":
@@ -549,6 +614,7 @@ def main(argv: list[str] | None = None) -> int:
             include_gridstatus=not args.no_gridstatus,
             include_osm=not args.no_osm,
             include_queue_feed=not args.no_queue_feed,
+            include_weather=not args.no_weather,
         )
     parser.error(f"Unknown command: {args.cmd}")
     return 2

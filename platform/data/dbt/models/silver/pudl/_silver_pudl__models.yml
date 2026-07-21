@@ -62,3 +62,26 @@ models:
         tests: [not_null]
       - name: net_generation_mwh
         tests: [not_null]
+
+  - name: silver_pudl__eia930_generation
+    description: |
+      EIA-930 hourly net generation by (balancing_authority, fuel_type).
+      Prefers PUDL's adjusted series, falling back to reported then
+      imputed. Feeds gold_market__generation_by_ba_hourly.
+    columns:
+      - name: balancing_authority
+        tests: [not_null]
+      - name: interval_start_utc
+        tests: [not_null]
+      - name: fuel_type
+        tests: [not_null]
+      - name: generation_mwh
+        tests: [not_null]
+      - name: source
+        tests:
+          - accepted_values:
+              values: ['pudl']
+      - name: license
+        tests:
+          - accepted_values:
+              values: ['CC-BY-4.0']

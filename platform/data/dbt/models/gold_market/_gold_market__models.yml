@@ -27,7 +27,8 @@ models:
   - name: gold_market__generation_by_ba_hourly
     description: |
       Hourly generation by balancing authority + fuel type. Populated from
-      EIA-930 (via PUDL) and GridStatus. Stub schema until loaders land.
+      EIA-930 via PUDL (silver_pudl__eia930_generation); GridStatus fuel-mix
+      can be unioned in later for finer intra-ISO resolution.
     columns:
       - name: balancing_authority
       - name: interval_start_utc
