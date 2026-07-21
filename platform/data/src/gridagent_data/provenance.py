@@ -85,9 +85,48 @@ OPEN_METEO = Source(
     notes="NWP forecast aggregator; attribution required for redistribution",
 )
 
+ELEXON_BMRS = Source(
+    name="elexon_bmrs",
+    url="https://bmrs.elexon.co.uk/",
+    license="Elexon-Open-Data",
+    notes="Insights Solution API; contains BSC data © Elexon Limited — attribution required",
+)
+NESO_OPEN_DATA = Source(
+    name="neso_open_data",
+    url="https://www.neso.energy/data-portal",
+    license="NESO-Open-Licence",
+    notes="CKAN portal; open licence, attribution required",
+)
+NG_ESO_CARBON_INTENSITY = Source(
+    name="carbon_intensity",
+    url="https://carbonintensity.org.uk/",
+    license="CC-BY-4.0",
+    notes="National Grid ESO GB carbon intensity, half-hourly forecast + actual",
+)
+PV_LIVE = Source(
+    name="pv_live",
+    url="https://www.solar.sheffield.ac.uk/pvlive/",
+    license="Attribution",
+    notes="University of Sheffield GB solar outturn estimates; attribution required",
+)
+ENTSOE = Source(
+    name="entsoe",
+    url="https://transparency.entsoe.eu/",
+    license="ENTSOE-API-Terms",
+    notes="Transparency Platform; free token required (ENTSOE_API_TOKEN); attribution required",
+)
+ECB_FX = Source(
+    name="ecb_fx",
+    url="https://www.ecb.europa.eu/stats/eurofxref/",
+    license="Attribution",
+    notes="Euro foreign exchange reference rates; free with attribution",
+)
+
 # Sources deliberately deferred until we can confirm a fully-open subset:
 #   * Global Energy Monitor — tiered; some trackers require commercial licensing.
-# v1 stays on US public-domain + CC-BY-4.0 + ODbL only.
+# GB/EU sources above carry their own open-but-bespoke licences (Elexon Open
+# Data, NESO Open Licence, ENTSO-E API terms) — all permit redistribution
+# with attribution; attribution strings surface via these Source records.
 
 
 def now_utc() -> datetime:

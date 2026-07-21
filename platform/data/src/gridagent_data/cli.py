@@ -12,6 +12,12 @@ Subcommands:
 * ``ingest afdc``            — NREL AFDC EV charging stations → bronze.
 * ``ingest usgs``            — USGS USWTDB turbines + USPVDB PV facilities → bronze.
 * ``ingest open_meteo``      — Open-Meteo hourly forecasts at ISO load centers → bronze.
+* ``ingest carbon_intensity``— GB carbon intensity (half-hourly, one day) → bronze.
+* ``ingest pv_live``         — GB national solar outturn (one day) → bronze.
+* ``ingest bmrs``            — Elexon BMRS datasets (one day) → bronze.
+* ``ingest neso``            — NESO Open Data CKAN datasets → bronze.
+* ``ingest entsoe``          — ENTSO-E prices + generation (token; one day) → bronze.
+* ``ingest ecb_fx``          — ECB euro reference FX rates → bronze.
 * ``snapshot rts``           — assemble a Snapshot bundle from RTS-GMLC bronze.
 * ``dbt <subcommand>``       — run dbt against the in-tree project.
 * ``bundle [atlas-public]``  — export warehouse → ``bundle.duckdb`` + PMTiles +
@@ -264,6 +270,86 @@ def cmd_ingest_open_meteo(point_name: str | None = None) -> int:
     return 0
 
 
+def _resolve_day(day: str | None):
+    from datetime import date as _date
+
+    if day:
+        return _date.fromisoformat(day)
+    return (datetime.now(timezone.utc) - timedelta(days=1)).date()
+
+
+def cmd_ingest_carbon_intensity(day: str | None) -> int:
+    from gridagent_data.sources.carbon_intensity import fetch_day
+
+    m = fetch_day(_resolve_day(day))
+    print(f"Carbon Intensity {m['day']}: {m['n_periods']} periods → {m['path']}")
+    return 0
+
+
+def cmd_ingest_pv_live(day: str | None) -> int:
+    from gridagent_data.sources.pv_live import fetch_day
+
+    m = fetch_day(_resolve_day(day))
+    print(f"PV_Live gsp {m['gsp_id']} {m['day']}: {m['n_rows']} rows → {m['path']}")
+    return 0
+
+
+def cmd_ingest_bmrs(day: str | None, dataset_name: str | None) -> int:
+    from gridagent_data.sources.elexon_bmrs import DATASETS, fetch_day
+
+    selected = (
+        [d for d in DATASETS if d.name == dataset_name] if dataset_name else list(DATASETS)
+    )
+    if not selected:
+        print(f"Unknown BMRS dataset '{dataset_name}'. Known: {[d.name for d in DATASETS]}")
+        return 2
+    for dataset in selected:
+        m = fetch_day(dataset, _resolve_day(day))
+        print(f"BMRS {dataset.name} {m['day']}: {m['n_rows']} rows → {m['path']}")
+    return 0
+
+
+def cmd_ingest_neso(dataset_name: str | None) -> int:
+    from gridagent_data.sources.neso import DATASETS, fetch_dataset
+
+    selected = (
+        [d for d in DATASETS if d.name == dataset_name] if dataset_name else list(DATASETS)
+    )
+    if not selected:
+        print(f"Unknown NESO dataset '{dataset_name}'. Known: {[d.name for d in DATASETS]}")
+        return 2
+    for dataset in selected:
+        m = fetch_dataset(dataset)
+        print(f"NESO {dataset.name}: {m['bytes']} bytes ({m['resource_name']}) → {m['path']}")
+    return 0
+
+
+def cmd_ingest_entsoe(day: str | None, zone_name: str | None) -> int:
+    from gridagent_data.sources.entsoe import DOCUMENTS, ZONES, fetch_day
+
+    zones = [z for z in ZONES if z.name == zone_name] if zone_name else list(ZONES)
+    if not zones:
+        print(f"Unknown ENTSO-E zone '{zone_name}'. Known: {[z.name for z in ZONES]}")
+        return 2
+    for zone in zones:
+        for document in DOCUMENTS:
+            try:
+                m = fetch_day(zone, document, _resolve_day(day))
+                print(f"ENTSO-E {zone.name}/{document.name} {m['day']}: {m['bytes']} bytes → {m['path']}")
+            except RuntimeError as exc:
+                print(f"  ! {zone.name}/{document.name}: {exc}", file=sys.stderr)
+                return 2
+    return 0
+
+
+def cmd_ingest_ecb_fx() -> int:
+    from gridagent_data.sources.ecb_fx import fetch_daily_rates
+
+    m = fetch_daily_rates()
+    print(f"ECB FX {m['rate_date']}: {m['n_currencies']} currencies → {m['path']}")
+    return 0
+
+
 def cmd_ingest_pypsa_usa(source_path: str | None, *, label: str) -> int:
     from gridagent_data.sources.pypsa_usa import adopt_elec_nc, fetch_elec_nc
 
@@ -431,6 +517,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=[
             "pudl", "rts_gmlc", "gridstatus", "lbnl", "hifld", "osm",
             "pypsa_usa", "queue_feed", "afdc", "usgs", "open_meteo",
+            "carbon_intensity", "pv_live", "bmrs", "neso", "entsoe", "ecb_fx",
         ],
     )
     ing.add_argument("path", nargs="?", help="Source path / URL (for pypsa_usa).")
@@ -445,6 +532,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ing.add_argument(
         "--api-key", default=None, help="API key override (afdc only; default: $AFDC_API_KEY)."
+    )
+    ing.add_argument(
+        "--zone", default=None, help="ENTSO-E zone name (entsoe only; default: all)."
     )
 
     qa_cmd = sub.add_parser("qa", help="Visual QA gate utilities.")
@@ -583,6 +673,18 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_ingest_usgs(args.path)
     if args.cmd == "ingest" and args.source == "open_meteo":
         return cmd_ingest_open_meteo(args.path)
+    if args.cmd == "ingest" and args.source == "carbon_intensity":
+        return cmd_ingest_carbon_intensity(args.day)
+    if args.cmd == "ingest" and args.source == "pv_live":
+        return cmd_ingest_pv_live(args.day)
+    if args.cmd == "ingest" and args.source == "bmrs":
+        return cmd_ingest_bmrs(args.day, args.path)
+    if args.cmd == "ingest" and args.source == "neso":
+        return cmd_ingest_neso(args.path)
+    if args.cmd == "ingest" and args.source == "entsoe":
+        return cmd_ingest_entsoe(args.day, args.zone)
+    if args.cmd == "ingest" and args.source == "ecb_fx":
+        return cmd_ingest_ecb_fx()
     if args.cmd == "qa" and args.qa_action == "screenshot":
         return cmd_qa_screenshot(args.bundle_dir, args.out_dir)
     if args.cmd == "qa" and args.qa_action == "approve-baseline":
