@@ -92,14 +92,22 @@ def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
         )
         branch_id_to_pp[str(row.branch_id)] = idx
 
+    # Dispatch proportional to capacity, scaled to meet total load (+2% loss
+    # margin), so the PF starting point is electrically sane. The previous
+    # midpoint cut left ~15% of RTS-GMLC load on the slack bus and NR diverged
+    # on the *base case*.
+    live_gens = gens[gens["in_service"].astype(bool)]
+    total_pmax = float(live_gens["p_max_mw"].sum())
+    total_load = float(loads.loc[loads["in_service"].astype(bool), "p_mw"].sum())
+    dispatch_scale = min(1.0, 1.02 * total_load / total_pmax) if total_pmax > 0 else 0.0
+
     for row in gens.itertuples(index=False):
         if not bool(row.in_service):
             continue
         b = bus_idx.get(str(row.bus_id))
         if b is None:
             continue
-        # Dispatch each gen to its mid-point as a starting cut; PF will balance via slack.
-        p_mw = max(0.0, 0.5 * float(row.p_max_mw))
+        p_mw = float(np.clip(dispatch_scale * float(row.p_max_mw), float(row.p_min_mw), float(row.p_max_mw)))
         pp.create_gen(
             net,
             bus=b,
@@ -145,14 +153,77 @@ class PandapowerBackend:
             }
 
         max_mismatch = float(np.abs(net.res_bus[["p_mw", "q_mvar"]].values).max()) if converged else None
+        # The slack is a gen row (slack=True), not an ext_grid — report its dispatch.
+        slack_mask = net.gen["slack"].astype(bool)
+        slack_p = float(net.res_gen.loc[slack_mask, "p_mw"].sum()) if converged else None
+        slack_q = float(net.res_gen.loc[slack_mask, "q_mvar"].sum()) if converged else None
         return {
             "value": {
                 "n_buses": len(net.bus),
                 "n_branches": len(net.line),
-                "slack_p_mw": float(net.res_ext_grid["p_mw"].iloc[0]) if converged else None,
-                "slack_q_mvar": float(net.res_ext_grid["q_mvar"].iloc[0]) if converged else None,
+                "slack_p_mw": slack_p,
+                "slack_q_mvar": slack_q,
             },
             "signal": {"converged": converged, "max_mismatch_mw": max_mismatch},
+        }
+
+    def dc_opf(self, snapshot: Snapshot, scenario: dict[str, Any]) -> dict[str, Any]:
+        """Single-period DC OPF with LMP duals (``lam_p``) — parity twin of the
+        tellegen backend's ``dc_opf``; same value/signal shape."""
+        pp = _import_pandapower()
+        net, _, _ = _build_net(snapshot, scenario)
+        _attach_costs(net)
+        try:
+            pp.rundcopp(net)
+            converged = bool(net.OPF_converged)
+        except Exception as exc:  # noqa: BLE001 -- surface as signal, not crash
+            return {
+                "value": {"error": str(exc)},
+                "signal": {"solver_status": "ERROR", "objective": None},
+            }
+        if not converged:
+            return {
+                "value": {"error": "OPF did not converge"},
+                "signal": {"solver_status": "INFEASIBLE", "objective": None},
+            }
+
+        lmp = [
+            {"bus_id": str(net.bus.at[i, "name"]), "lmp_usd_per_mwh": float(net.res_bus.at[i, "lam_p"])}
+            for i in net.bus.index
+        ]
+        dispatch = [
+            {"generator_id": str(net.gen.at[i, "name"]), "p_mw": float(net.res_gen.at[i, "p_mw"])}
+            for i in net.gen.index
+        ]
+        flows = [
+            {
+                "branch_id": str(net.line.at[i, "name"]),
+                "p_from_mw": float(net.res_line.at[i, "p_from_mw"]),
+                "loading_pct": float(net.res_line.at[i, "loading_percent"]),
+            }
+            for i in net.line.index
+        ]
+        flows.sort(key=lambda r: r["loading_pct"], reverse=True)
+        binding = [f for f in flows if f["loading_pct"] >= 99.99]
+        lmp_vals = [r["lmp_usd_per_mwh"] for r in lmp]
+        objective = float(net.res_cost)
+        return {
+            "value": {
+                "objective_usd_per_hour": objective,
+                "lmp": lmp,
+                "dispatch": dispatch,
+                "flows_top": flows[:50],
+                "n_binding": len(binding),
+                "binding_branches": [f["branch_id"] for f in binding],
+            },
+            "signal": {
+                "solver_status": "OPTIMAL",
+                "objective": objective,
+                "lmp_min": min(lmp_vals) if lmp_vals else None,
+                "lmp_max": max(lmp_vals) if lmp_vals else None,
+                "lmp_spread": (max(lmp_vals) - min(lmp_vals)) if lmp_vals else None,
+                "n_binding": len(binding),
+            },
         }
 
     def n1_contingency(

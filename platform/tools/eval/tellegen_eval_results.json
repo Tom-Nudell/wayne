@@ -1,0 +1,123 @@
+{
+  "snapshot": "data_root/bundle/snapshot_20260415_rts_gmlc",
+  "q3_prices_on_map": {
+    "identical_input_parity": {
+      "reference_scipy_highs": {
+        "status": 0,
+        "objective": 177337.95631414864,
+        "lmp_min": -8.416228977082746,
+        "lmp_max": 30.0
+      },
+      "pandapower_objective": 162100.0000000711,
+      "tellegen_objective": 177363.1077704287,
+      "objective_rel_diff": 0.09415859204411417,
+      "pandapower_lam_p_max_abs": 3.28501889698086e-10,
+      "pandapower_duals_usable": false,
+      "tellegen_lmp_min": -8.435656062931605,
+      "tellegen_lmp_max": 30.000000001648765,
+      "tellegen_n_binding": 3
+    },
+    "latency_s": {
+      "tellegen_dcopf_median": 0.009595499519491568,
+      "pandapower_dcopf_median": 0.022947958495933563,
+      "bridge_snapshot_to_json": 0.008382415981031954,
+      "sweep_24_periods_est_tellegen": 0.2386744044488296
+    },
+    "socwr": {
+      "available": false,
+      "error": "tellegen solve failed: tellegen: solve failed: socwr requires the `conic` feature"
+    },
+    "bridge_warnings": []
+  },
+  "q1_conditioner": {
+    "full_lodf_screen_s": 0.5005794999888167,
+    "full_overload_pairs": 50,
+    "tellegen_dcopf_s": 0.01010750001296401,
+    "recall_of_truth_monitored_set": {
+      "monitored_recall@10": 0.5714285714285714,
+      "monitored_recall@20": 0.7857142857142857,
+      "monitored_recall@30": 0.7857142857142857
+    },
+    "screened_top20": {
+      "seconds": 0.47783274995163083,
+      "pairs_found": 50,
+      "pairs_missed_vs_full": 3,
+      "pair_recall": 0.94
+    },
+    "powerio_native_factors": {
+      "available": true,
+      "lodf_seconds": 0.0039392500184476376,
+      "ptdf_seconds": 0.001708791998680681
+    }
+  },
+  "q2_robustness": {
+    "sweep": [
+      {
+        "scale_load": 1.0,
+        "pandapower_acpf_converged": true,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": true
+      },
+      {
+        "scale_load": 1.2,
+        "pandapower_acpf_converged": true,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": true
+      },
+      {
+        "scale_load": 1.4,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": true
+      },
+      {
+        "scale_load": 1.6,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      },
+      {
+        "scale_load": 1.8,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      },
+      {
+        "scale_load": 2.0,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      },
+      {
+        "scale_load": 2.2,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      },
+      {
+        "scale_load": 2.4,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      },
+      {
+        "scale_load": 2.6,
+        "pandapower_acpf_converged": false,
+        "tellegen_acpf_converged": false,
+        "tellegen_newton_iters": null,
+        "dcopf_optimal": false
+      }
+    ],
+    "pandapower_acpf_failure_onset": 1.4,
+    "tellegen_acpf_failure_onset": 1.0,
+    "dcopf_failure_onset": 1.6
+  }
+}

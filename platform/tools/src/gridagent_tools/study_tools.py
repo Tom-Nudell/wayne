@@ -18,7 +18,7 @@ from .scenario_tools import load_scenario
 
 
 _DEFAULT_EXECUTOR = "pandapower"
-_EXECUTORS = ["pandapower", "sienna"]
+_EXECUTORS = ["pandapower", "sienna", "tellegen"]
 
 _STUDY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -47,6 +47,15 @@ def _run(study: str, scenario_id: str, executor: str, **kwargs) -> ToolResult:
 )
 def run_power_flow(scenario_id: str, executor: str = _DEFAULT_EXECUTOR) -> ToolResult:
     return _run("power_flow", scenario_id, executor)
+
+
+@register(
+    name="run_dc_opf",
+    description="Solve DC OPF on a scenario; returns LMPs, dispatch, flows, binding branches.",
+    schema=_STUDY_SCHEMA,
+)
+def run_dc_opf(scenario_id: str, executor: str = _DEFAULT_EXECUTOR) -> ToolResult:
+    return _run("dc_opf", scenario_id, executor)
 
 
 @register(
