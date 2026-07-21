@@ -23,6 +23,9 @@ class Backend(Protocol):
     def power_flow(self, snapshot: Snapshot, scenario: dict[str, Any]) -> dict[str, Any]:
         """Solve AC power flow. Returns ``{"value": {...}, "signal": {...}}``."""
 
+    def dc_opf(self, snapshot: Snapshot, scenario: dict[str, Any]) -> dict[str, Any]:
+        """DC OPF. Returns LMPs, dispatch, flows, binding branches."""
+
     def n1_contingency(
         self, snapshot: Snapshot, scenario: dict[str, Any], *, monitored: list[str] | None = None
     ) -> dict[str, Any]:

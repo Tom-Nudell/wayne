@@ -59,6 +59,12 @@ class SiennaBackend:
     def power_flow(self, snapshot: Snapshot, scenario: dict[str, Any]) -> dict[str, Any]:
         return _invoke("power_flow", snapshot, scenario)
 
+    def dc_opf(self, snapshot: Snapshot, scenario: dict[str, Any]) -> dict[str, Any]:
+        raise BackendUnavailable(
+            "dc_opf not wired into the Julia entrypoint yet; use executor="
+            "'tellegen' or 'pandapower'."
+        )
+
     def n1_contingency(
         self, snapshot: Snapshot, scenario: dict[str, Any], *, monitored: list[str] | None = None
     ) -> dict[str, Any]:
