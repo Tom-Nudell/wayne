@@ -87,6 +87,15 @@ ACTIVITY_PORTS: dict[str, dict[str, str]] = {
         "n_binding": "signal.n_binding",
         "lmp": "value.lmp",
     },
+    "run_injection_study": {
+        "feasible": "signal.feasible",
+        "delta_objective": "signal.delta_objective",
+        "delta_lmp_at_bus": "signal.delta_lmp_at_bus",
+        "n_new_overloads": "signal.n_new_overloads",
+        "n_relieved_overloads": "signal.n_relieved_overloads",
+        "worst_new_loading_pct": "signal.worst_new_loading_pct",
+        "direction": "value.direction",
+    },
 }
 
 

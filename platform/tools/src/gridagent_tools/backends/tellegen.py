@@ -89,6 +89,9 @@ def _apply_change_table(buses, branches, gens, loads, scenario: dict[str, Any]):
         branches = branches.copy()
         oos = set(change_table["out_of_service_branches"])
         branches.loc[branches["branch_id"].isin(oos), "in_service"] = False
+    from .pandapower import _apply_injections
+
+    gens, loads = _apply_injections(gens, loads, change_table)
     return buses, branches, gens, loads
 
 
@@ -113,8 +116,10 @@ def snapshot_to_matpower(
     gens_live = gens[gens["in_service"].astype(bool)].sort_values("generator_id")
     gens_live = gens_live[gens_live["bus_id"].astype(str).isin(bus_num)].reset_index(drop=True)
 
-    # Same slack rule as the pandapower backend: largest unit, ties by id.
-    slack_row = gens_live.sort_values(
+    # Same slack rule as the pandapower backend: largest unit, ties by id,
+    # must-take injections excluded (their dispatch must stay pinned).
+    slack_candidates = gens_live[gens_live["fuel"].astype(str) != "injection"]
+    slack_row = slack_candidates.sort_values(
         ["p_max_mw", "generator_id"], ascending=[False, True]
     ).iloc[0]
     slack_bus = str(slack_row.bus_id)

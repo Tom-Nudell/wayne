@@ -27,6 +27,53 @@ def _import_pandapower():
         ) from exc
 
 
+def _apply_injections(gens, loads, change_table: dict[str, Any]):
+    """Apply ``add_injection`` ({bus_id: ±MW}) to the gen/load frames.
+
+    Positive MW appends a **must-take generator** (pmin = pmax = MW) so the
+    OPF cannot re-dispatch it away — an injection study asks "what does the
+    grid do if this power shows up", not "would the market take it".
+    Negative MW appends a load. Shared by every backend so the semantics
+    can't drift.
+    """
+    import pandas as pd
+
+    injections = change_table.get("add_injection") or {}
+    if not injections:
+        return gens, loads
+    gen_rows, load_rows = [], []
+    for bus_id, raw_mw in injections.items():
+        mw = float(raw_mw)
+        if mw > 0:
+            gen_rows.append(
+                {
+                    "generator_id": f"injection_{bus_id}",
+                    "bus_id": str(bus_id),
+                    "p_max_mw": mw,
+                    "p_min_mw": mw,
+                    "q_max_mvar": 0.0,
+                    "q_min_mvar": 0.0,
+                    "fuel": "injection",
+                    "in_service": True,
+                }
+            )
+        elif mw < 0:
+            load_rows.append(
+                {
+                    "load_id": f"withdrawal_{bus_id}",
+                    "bus_id": str(bus_id),
+                    "p_mw": -mw,
+                    "q_mvar": 0.0,
+                    "in_service": True,
+                }
+            )
+    if gen_rows:
+        gens = pd.concat([gens, pd.DataFrame(gen_rows)], ignore_index=True)
+    if load_rows:
+        loads = pd.concat([loads, pd.DataFrame(load_rows)], ignore_index=True)
+    return gens, loads
+
+
 def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
     """Materialize a pandapower Network from a snapshot + scenario change-table."""
     pp = _import_pandapower()
@@ -51,6 +98,7 @@ def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
         branches = branches.copy()
         oos = set(change_table["out_of_service_branches"])
         branches.loc[branches["branch_id"].isin(oos), "in_service"] = False
+    gens, loads = _apply_injections(gens, loads, change_table)
 
     net = pp.create_empty_network(sn_mva=base_mva)
 
@@ -62,8 +110,11 @@ def _build_net(snapshot: Snapshot, scenario: dict[str, Any]):
     # Pick a slack: largest generator, deterministic by generator_id. We mark
     # it ``slack=True`` rather than spawning an ``ext_grid``, so OPF sees a
     # bounded dispatchable unit (with a real cost curve) at this bus — no
-    # infinite penalty slack distorting the objective.
-    slack_gen_row = gens.sort_values(
+    # infinite penalty slack distorting the objective. Must-take injections
+    # are excluded — a slack's output floats, which would silently un-fix
+    # the very quantity an injection study holds constant.
+    slack_candidates = gens[gens["fuel"].astype(str) != "injection"]
+    slack_gen_row = slack_candidates.sort_values(
         ["p_max_mw", "generator_id"], ascending=[False, True]
     ).iloc[0]
     slack_generator_id = str(slack_gen_row.generator_id)
@@ -433,6 +484,9 @@ _FUEL_COST_USD_PER_MWH: dict[str, float] = {
     "biomass": 40.0,
     "geothermal": 15.0,
     "storage": 0.0,
+    # Must-take injection-study resource: dispatch is pinned (pmin = pmax),
+    # zero cost keeps the objective clean of placeholder pricing.
+    "injection": 0.0,
 }
 _DEFAULT_FUEL_COST = 40.0
 

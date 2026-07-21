@@ -44,34 +44,49 @@ affect the world is through the registered tools — never invent numbers,
 never paraphrase tool output as your own analysis.
 
 CRITICAL RULES:
-- Execute each playbook step exactly once, in order. Never repeat a step.
-- After step 1, use the first snapshot_id you received for all subsequent calls.
-- After step 2, proceed immediately to step 3 regardless of what the data shows.
-- If the data does not match the goal (e.g. goal says ERCOT but data is a test
-  system), run the study anyway and note the limitation in your summary.
-- Never ask for clarification. Never exit early. Complete all 5 steps.
+- Call each tool at most twice for the whole episode. Never loop.
+- Never ask for clarification. Choose the closest-matching study, run it,
+  and note assumptions in the summary.
+- If the data does not match the goal (e.g. goal says ERCOT but data is a
+  test system), run the study anyway and note the limitation.
+- Use exactly the ids returned by earlier tools (snapshot_id, scenario_id,
+  bus_id) — never invent or abbreviate them.
 
 Each tool returns a value plus a *supervisory signal*. A rule-based verifier
 inspects that signal before it reaches you. If the verifier rejects the
 result you will receive a ModelRetry — revise and retry that single step only.
 
-Playbook — four steps, execute each exactly once:
+STANDARD OPENING (always):
+  1. ``list_data_snapshots`` once. Use the first snapshot_id everywhere.
 
-  STEP 1: ``list_data_snapshots``
-    → Record the first snapshot_id in the result. Use it everywhere below.
+CHOOSING THE STUDY — match the goal's intent:
+  - overloads / contingencies / reliability / outages
+      → ``create_scenario`` (change_table per the goal, {} for baseline),
+        then ``run_n1_contingency`` with executor="pandapower".
+  - prices / LMPs / congestion cost / "where is power expensive"
+      → ``create_scenario``, then ``run_dc_opf`` with executor="tellegen"
+        (the only executor with verified price duals).
+  - new load, new generator, interconnection request, "what if X MW at bus Y"
+      → ``run_injection_study`` with bus_id and p_mw (positive injects
+        generation, negative adds load). No scenario needed — it diffs
+        against the baseline itself. If the goal names a place instead of
+        a bus, first ``query_grid`` table="buses" to find the closest bus.
+  - production cost / dispatch over hours
+      → ``create_scenario``, then ``run_production_cost``.
+  - "does it converge" / voltage sanity
+      → ``create_scenario``, then ``run_power_flow``.
+  - Ambiguous goals: run ``run_n1_contingency`` and ``run_dc_opf`` on the
+    same scenario and summarize both. Never run more than three studies.
 
-  STEP 2: ``query_grid`` with table="branches" and the snapshot_id from STEP 1.
-    → One call only. Note the schema. Then move to STEP 3 immediately.
+GRID MUTATIONS in create_scenario's change_table:
+  scale_load (factor), scale_plant_capacity ({generator_id: factor}),
+  out_of_service_branches ([branch_id, ...]),
+  add_injection ({bus_id: ±MW, must-take}).
 
-  STEP 3: ``create_scenario`` with change_table={} and the snapshot_id from STEP 1.
-    → Record the scenario_id returned. Use it in STEP 4.
-
-  STEP 4: ``run_n1_contingency`` with the scenario_id from STEP 3, executor="pandapower".
-    → Returns ranked overload list. This is the answer. Always use pandapower.
-
-After STEP 4, return a summary with: snapshot used, worst overload
-(monitored branch, outage branch, loading %), total overload count,
-and any data limitations.
+SUMMARY: state the snapshot used, the study/studies run and why they match
+the goal, the headline numbers from the signals (worst overload, LMP range,
+Δcost, ΔLMP — whichever apply), and any data limitations. Numbers must come
+verbatim from tool results.
 """
 
 
@@ -304,5 +319,39 @@ def make_agent(
             "horizon_hours": horizon_hours,
         }
         return _step_with_args(ctx, "run_production_cost", args, result.value, result.signal)
+
+    @agent.tool
+    def run_dc_opf(
+        ctx: RunContext[OrchestratorDeps],
+        scenario_id: str,
+        executor: str = "tellegen",
+    ) -> Any:
+        """DC OPF: LMPs, dispatch, flows, binding branches.
+
+        Default (and correct) executor is tellegen — the only backend whose
+        LMP duals are verified. Use for any pricing/congestion question.
+        """
+        result = _call_tool("run_dc_opf", scenario_id=scenario_id, executor=executor)
+        args = {"scenario_id": scenario_id, "executor": executor}
+        return _step_with_args(ctx, "run_dc_opf", args, result.value, result.signal)
+
+    @agent.tool
+    def run_injection_study(
+        ctx: RunContext[OrchestratorDeps],
+        bus_id: str,
+        p_mw: float,
+        scenario_id: str | None = None,
+    ) -> Any:
+        """Impact of injecting (+MW) or withdrawing (-MW) power at a bus.
+
+        Diffs the modified case against the base internally: ΔLMP at the
+        bus, Δsystem-cost, new and relieved N-1 overloads. No scenario
+        needed for a baseline study; pass one to perturb an existing case.
+        """
+        result = _call_tool(
+            "run_injection_study", bus_id=bus_id, p_mw=p_mw, scenario_id=scenario_id
+        )
+        args = {"bus_id": bus_id, "p_mw": p_mw, "scenario_id": scenario_id}
+        return _step_with_args(ctx, "run_injection_study", args, result.value, result.signal)
 
     return agent
