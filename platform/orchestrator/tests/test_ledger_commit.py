@@ -46,9 +46,15 @@ def test_study_episode_commits(tmp_path):
             _FINISH,
         ],
     )
-    entry = entry_from_episode(log, workflow_name="injection_study")
+    entry = entry_from_episode(
+        log,
+        workflow_name="injection_study",
+        workflow_inputs={"bus_id": "309", "p_mw": 250.0},
+    )
     assert entry is not None
     assert entry["question"]["intent"] == "injection_study"
+    # Inputs are pinned so revalidation can re-execute the entry verbatim.
+    assert entry["method"]["inputs"] == {"bus_id": "309", "p_mw": 250.0}
     assert entry["subject"]["subsystem"]["buses"] == ["309"]
     # Scenario-less injection synthesizes its delta as the model-state change.
     assert entry["model_state"]["change_table"] == {"add_injection": {"309": 250.0}}

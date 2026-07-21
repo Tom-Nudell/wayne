@@ -154,18 +154,41 @@ def _export_overlays(
         emit(f"Atlas overlay skipped: {exc}")
 
 
+def _refresh_ledger_staleness(emit: Callable[[str], None]) -> None:
+    """Lazy staleness pass (brief §6): flags are refreshed at the moment
+    the record is about to be consulted, so a retrieving agent sees current
+    staleness. Never fails the run."""
+    from .ledger_revalidation import refresh_staleness
+
+    try:
+        newly = refresh_staleness()
+    except Exception as exc:  # noqa: BLE001 -- record-keeping must not kill the run
+        emit(f"Ledger staleness refresh skipped: {exc}")
+        return
+    if newly:
+        emit(
+            f"Ledger: {len(newly)} entr{'y' if len(newly) == 1 else 'ies'} "
+            "went stale (dependencies changed)."
+        )
+
+
 def _commit_to_ledger(
     episode: Episode,
     workflow_name: str | None,
     emit: Callable[[str], None],
     on_event: EventCallback | None,
+    workflow_inputs: dict[str, Any] | None = None,
 ) -> None:
     """Entry ⇔ commit (study-ledger brief §3). A ledger failure must never
     fail the study — the episode log is still the step-level record."""
     from .ledger_commit import commit_episode
 
     try:
-        entry_id = commit_episode(episode.log_path, workflow_name=workflow_name)
+        entry_id = commit_episode(
+            episode.log_path,
+            workflow_name=workflow_name,
+            workflow_inputs=workflow_inputs,
+        )
     except Exception as exc:  # noqa: BLE001 -- record-keeping must not kill the run
         emit(f"Ledger commit skipped: {exc}")
         return
@@ -193,6 +216,7 @@ def run_episode(
     ``Episode.on_event``); ``emit`` carries the human-facing side notes
     (overlay paths). Pass a no-op emit when stdout must stay machine-clean.
     """
+    _refresh_ledger_staleness(emit)
     episode = Episode.new(goal=goal, root=_episode_root(), on_event=on_event)
     _drive_agent(
         episode,
@@ -268,6 +292,7 @@ def run_workflow_episode(
     goal = render_goal(spec, resolved)
     verifier = verifier or Verifier.default()
 
+    _refresh_ledger_staleness(emit)
     episode = Episode.new(goal=goal, root=_episode_root(), on_event=on_event)
     outcome = run_workflow(spec, resolved, verifier=verifier, episode=episode)
 
@@ -295,7 +320,7 @@ def run_workflow_episode(
         )
 
     _export_overlays(episode, atlas_overlay_dir, emit, on_event)
-    _commit_to_ledger(episode, name, emit, on_event)
+    _commit_to_ledger(episode, name, emit, on_event, workflow_inputs=resolved)
     return episode
 
 

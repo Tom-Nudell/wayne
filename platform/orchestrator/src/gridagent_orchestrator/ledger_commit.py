@@ -119,11 +119,14 @@ def entry_from_episode(
     episode_log: Path,
     *,
     workflow_name: str | None = None,
+    workflow_inputs: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Build a ledger entry from an episode log, or None if nothing commits.
 
     ``workflow_name`` marks the fixed-workflow path; free-form agent runs
-    pass None and are recorded as method type "agent".
+    pass None and are recorded as method type "agent". ``workflow_inputs``
+    (the resolved inputs) are pinned on the method so the entry can be
+    re-executed verbatim — the revalidation write path needs them.
     """
     records = [json.loads(line) for line in episode_log.read_text().splitlines() if line.strip()]
     start = next((r for r in records if r.get("event") == "start"), None)
@@ -147,6 +150,7 @@ def entry_from_episode(
         "type": "workflow" if workflow_name else "agent",
         "name": workflow_name,
         "spec_sha256": _spec_sha256(workflow_name) if workflow_name else None,
+        "inputs": dict(workflow_inputs) if workflow_name and workflow_inputs else None,
         "model": None if workflow_name else os.environ.get("GRIDAGENT_LLM_MODEL", "gemma4:e12b"),
         "tool_versions": _tool_versions(),
     }
@@ -178,9 +182,12 @@ def commit_episode(
     episode_log: Path,
     *,
     workflow_name: str | None = None,
+    workflow_inputs: dict[str, Any] | None = None,
 ) -> str | None:
     """Entry ⇔ commit for one episode. Returns entry_id, or None."""
-    entry = entry_from_episode(episode_log, workflow_name=workflow_name)
+    entry = entry_from_episode(
+        episode_log, workflow_name=workflow_name, workflow_inputs=workflow_inputs
+    )
     if entry is None:
         return None
     return commit_entry(entry)

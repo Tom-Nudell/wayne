@@ -10,7 +10,8 @@ v1 substrate (deliberately replaceable; brief §10 keeps engines open):
 per line. O_APPEND keeps concurrent writers safe, and duckdb's
 ``read_json_auto`` makes the file SQL-queryable without a database server.
 Entries are immutable once written; supersession and staleness are new
-lines + flags, never edits (brief §6).
+lines + flags, never edits (brief §6) — status events append to
+``status_events.jsonl`` and overlay onto ``entry["status"]`` at read time.
 
 Entry shape (see brief §3):
 
@@ -54,6 +55,21 @@ def entries_path() -> Path:
     return _ledger_root() / "entries.jsonl"
 
 
+def status_path() -> Path:
+    return _ledger_root() / "status_events.jsonl"
+
+
+def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
+    line = json.dumps(record, sort_keys=True, default=str)
+    # O_APPEND: single-syscall line writes stay atomic across the concurrent
+    # orchestrator subprocesses the web bridge spawns.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    try:
+        os.write(fd, (line + "\n").encode())
+    finally:
+        os.close(fd)
+
+
 _REQUIRED_KEYS = {"subject", "question", "model_state", "method", "results", "trace"}
 
 
@@ -76,26 +92,77 @@ def commit_entry(entry: dict[str, Any]) -> str:
     entry.setdefault(
         "governance", {"owner": "", "tenant": "", "visibility": "private", "licenses": []}
     )
-    line = json.dumps(entry, sort_keys=True, default=str)
-    # O_APPEND: single-syscall line writes stay atomic across the concurrent
-    # orchestrator subprocesses the web bridge spawns.
-    fd = os.open(entries_path(), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-    try:
-        os.write(fd, (line + "\n").encode())
-    finally:
-        os.close(fd)
+    _append_jsonl(entries_path(), entry)
     return str(entry["entry_id"])
 
 
+# ---------------------------------------------------------------------------
+# Status events — the flag flips of brief §6. Entries are immutable, so
+# staleness and supersession are append-only events on a side file, overlaid
+# onto ``entry["status"]`` at read time. Originals never mutate.
+# ---------------------------------------------------------------------------
+
+
+def append_status_event(entry_id: str, **fields: Any) -> None:
+    event = {
+        "entry_id": entry_id,
+        "at": datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+        **fields,
+    }
+    _append_jsonl(status_path(), event)
+
+
+def mark_stale(entry_id: str, reasons: list[str]) -> None:
+    append_status_event(entry_id, stale=True, stale_reasons=list(reasons))
+
+
+def mark_superseded(
+    entry_id: str, new_entry_id: str, *, conclusion_changed: bool | None = None
+) -> None:
+    """Link a revalidation: the old entry is stale and superseded; the new
+    entry records what it supersedes. ``conclusion_changed`` is the learning
+    outcome signal (brief §6/§7) — None when not evaluated."""
+    append_status_event(
+        entry_id,
+        stale=True,
+        superseded_by=new_entry_id,
+        conclusion_changed=conclusion_changed,
+    )
+    append_status_event(new_entry_id, supersedes=entry_id)
+
+
+def _status_overlays() -> dict[str, dict[str, Any]]:
+    path = status_path()
+    if not path.exists():
+        return {}
+    overlays: dict[str, dict[str, Any]] = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        event = json.loads(line)
+        entry_id = str(event.get("entry_id", ""))
+        fields = {k: v for k, v in event.items() if k not in ("entry_id", "at")}
+        overlays.setdefault(entry_id, {}).update(fields)
+    return overlays
+
+
 def load_entries() -> list[dict[str, Any]]:
+    """Entries with status events overlaid — the effective view."""
     path = entries_path()
     if not path.exists():
         return []
+    overlays = _status_overlays()
     out: list[dict[str, Any]] = []
     for line in path.read_text().splitlines():
         line = line.strip()
-        if line:
-            out.append(json.loads(line))
+        if not line:
+            continue
+        entry = json.loads(line)
+        overlay = overlays.get(str(entry.get("entry_id", "")))
+        if overlay:
+            entry["status"] = {**entry.get("status", {}), **overlay}
+        out.append(entry)
     return out
 
 
@@ -156,6 +223,8 @@ def _summarize(entry: dict[str, Any]) -> dict[str, Any]:
         "signals": [{"tool": s.get("tool"), **(s.get("signal") or {})} for s in studies],
         "summary": (entry.get("results", {}).get("summary") or "")[:240],
         "stale": entry.get("status", {}).get("stale", False),
+        "stale_reasons": entry.get("status", {}).get("stale_reasons") or [],
+        "supersedes": entry.get("status", {}).get("supersedes"),
         "superseded_by": entry.get("status", {}).get("superseded_by"),
     }
 
@@ -182,7 +251,15 @@ def _summarize(entry: dict[str, Any]) -> dict[str, Any]:
             "branch_id": {"type": "string"},
             "snapshot_id": {"type": "string"},
             "text": {"type": "string", "description": "Keywords matched anywhere in the entry."},
-            "include_stale": {"type": "boolean", "default": False},
+            "include_stale": {
+                "type": "boolean",
+                "default": False,
+                "description": (
+                    "Stale entries (dependencies changed since the study ran) "
+                    "are hidden by default; n_stale_hidden in the result says "
+                    "how many. Pass true to see them."
+                ),
+            },
             "limit": {"type": "integer", "default": 10},
         },
         "additionalProperties": False,
@@ -207,16 +284,28 @@ def query_ledger(
                 e, intent=with_intent, bus_id=bus_id, branch_id=branch_id,
                 snapshot_id=snapshot_id, text=text,
             )
-            and (include_stale or not e.get("status", {}).get("stale", False))
         ]
 
-    hits = filtered(intent)
+    def fresh(matched: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            e
+            for e in matched
+            if include_stale or not e.get("status", {}).get("stale", False)
+        ]
+
+    matched = filtered(intent)
+    hits = fresh(matched)
     intent_relaxed = False
     # Intent is a soft filter: a loosely-phrased intent should widen to the
     # subject/text matches, not hide them behind vocabulary mismatch.
     if not hits and intent and (bus_id or branch_id or snapshot_id or text):
-        hits = filtered(None)
+        matched = filtered(None)
+        hits = fresh(matched)
         intent_relaxed = bool(hits)
+
+    # Hidden stale matches are revalidation candidates — the agent can't ask
+    # for a re-run of a prior study it doesn't know exists (brief §6).
+    n_stale_hidden = len(matched) - len(hits)
 
     hits.sort(key=lambda e: str(e.get("committed_at", "")), reverse=True)
     matches = [_summarize(e) for e in hits[: max(1, int(limit))]]
@@ -226,6 +315,7 @@ def query_ledger(
             "matches": matches,
             "n_total_entries": len(entries),
             "intent_relaxed": intent_relaxed,
+            "n_stale_hidden": n_stale_hidden,
         },
         signal={"n_matches": len(hits), "n_returned": len(matches)},
     )

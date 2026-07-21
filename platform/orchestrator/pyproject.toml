@@ -25,6 +25,7 @@ embeddings = ["sentence-transformers>=3"]
 [project.scripts]
 gridagent-orchestrator = "gridagent_orchestrator.run:main"
 gridagent-export-n1-overlay = "gridagent_orchestrator.overlay_export:main"
+gridagent-ledger = "gridagent_orchestrator.ledger_revalidation:main"
 
 [tool.uv.sources]
 gridagent-tools = { path = "../tools", editable = true }

@@ -85,6 +85,44 @@ def test_stale_entries_hidden_by_default(isolated_ledger):
     assert ledger.query_ledger(bus_id="309", include_stale=True).signal["n_matches"] == 1
 
 
+def test_mark_stale_overlays_without_mutating_entries(isolated_ledger):
+    entry_id = ledger.commit_entry(_entry())
+    ledger.mark_stale(entry_id, ["pandapower 2.14.7 → 2.15.0"])
+
+    # The entry line is untouched — the flag lives in the status event file.
+    raw = json.loads(ledger.entries_path().read_text().splitlines()[0])
+    assert raw["status"]["stale"] is False
+    assert ledger.status_path().exists()
+
+    (loaded,) = ledger.load_entries()
+    assert loaded["status"]["stale"] is True
+    assert loaded["status"]["stale_reasons"] == ["pandapower 2.14.7 → 2.15.0"]
+
+    out = ledger.query_ledger(bus_id="309")
+    assert out.signal["n_matches"] == 0
+    assert out.value["n_stale_hidden"] == 1
+    out = ledger.query_ledger(bus_id="309", include_stale=True)
+    assert out.value["matches"][0]["stale_reasons"] == ["pandapower 2.14.7 → 2.15.0"]
+    assert out.value["n_stale_hidden"] == 0
+
+
+def test_supersession_links_both_directions(isolated_ledger):
+    old_id = ledger.commit_entry(_entry())
+    new_id = ledger.commit_entry(_entry())
+    ledger.mark_superseded(old_id, new_id, conclusion_changed=True)
+
+    by_id = {e["entry_id"]: e for e in ledger.load_entries()}
+    assert by_id[old_id]["status"]["superseded_by"] == new_id
+    assert by_id[old_id]["status"]["stale"] is True
+    assert by_id[old_id]["status"]["conclusion_changed"] is True
+    assert by_id[new_id]["status"]["supersedes"] == old_id
+    assert by_id[new_id]["status"]["stale"] is False
+
+    # Default query returns only the superseding entry.
+    out = ledger.query_ledger(bus_id="309")
+    assert [m["entry_id"] for m in out.value["matches"]] == [new_id]
+
+
 def test_query_ledger_registered_as_tool():
     from gridagent_tools import TOOL_REGISTRY
 
