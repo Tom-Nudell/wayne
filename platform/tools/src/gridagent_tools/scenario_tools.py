@@ -30,6 +30,9 @@ _CHANGE_TABLE_KEYS = {
     "add_branch",
     "add_dcline",
     "out_of_service_branches",
+    # {bus_id: ±MW} — positive injects (must-take generator at the bus),
+    # negative withdraws (new load). The primitive under injection studies.
+    "add_injection",
 }
 
 

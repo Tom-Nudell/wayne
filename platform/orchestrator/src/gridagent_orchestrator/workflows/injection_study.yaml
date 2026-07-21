@@ -1,0 +1,34 @@
+# Injection/withdrawal screening — "what happens if X MW shows up (or
+# leaves) at this bus". The interconnection-study primitive: the tool
+# diffs LMPs, system cost, and the N-1 overload set against the base
+# case internally, so the workflow itself is a single study node.
+workflow: injection_study
+description: >-
+  Screen a power injection (+MW) or withdrawal (-MW) at a bus on the
+  newest snapshot: ΔLMP, Δsystem-cost, new and relieved N-1 overloads
+  vs the base case.
+
+goal: >-
+  Run the injection screening workflow at bus {inputs.bus_id} for
+  {inputs.p_mw} MW: base-vs-change LMP and N-1 impact, drawn on the map.
+
+inputs:
+  bus_id: {}
+  p_mw: {}
+
+nodes:
+  - id: snapshot
+    tool: list_data_snapshots
+
+  - id: study
+    tool: run_injection_study
+    bind:
+      bus_id: $inputs.bus_id
+      p_mw: $inputs.p_mw
+
+summary: >-
+  {study.direction} of {inputs.p_mw} MW at bus {inputs.bus_id}: feasible=
+  {study.feasible}, Δcost {study.delta_objective} $/h, ΔLMP at bus
+  {study.delta_lmp_at_bus} $/MWh, {study.n_new_overloads} new N-1
+  overload(s) (worst {study.worst_new_loading_pct}%),
+  {study.n_relieved_overloads} relieved.

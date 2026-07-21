@@ -46,6 +46,16 @@ def _n1_rule(signal: dict[str, Any], attempt: int) -> Decision:
     return Decision.ADVANCE  # n_overloads > 0 is fine; planner proposes mitigation
 
 
+def _injection_rule(signal: dict[str, Any], attempt: int) -> Decision:
+    # An infeasible modified case is a legitimate *finding* (the injection
+    # is too large for the grid), not a failure — advance and report it.
+    # A missing feasibility key means the tool contract broke: retry once,
+    # then hand back to the planner.
+    if "feasible" not in signal:
+        return Decision.RETRY if attempt < 2 else Decision.REPLAN
+    return Decision.ADVANCE
+
+
 def _pcm_rule(signal: dict[str, Any], attempt: int) -> Decision:
     if signal.get("solver_status") != "OPTIMAL":
         return Decision.REPLAN
@@ -76,5 +86,6 @@ class Verifier:
                 "run_power_flow": _power_flow_rule,
                 "run_n1_contingency": _n1_rule,
                 "run_production_cost": _pcm_rule,
+                "run_injection_study": _injection_rule,
             }
         )
