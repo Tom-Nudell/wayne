@@ -14,3 +14,5 @@ sources:
         description: EIA-860 plant-level annual snapshot (lat/lon, BA, NERC region).
       - name: core_eia923__monthly_generation
         description: EIA-923 monthly net generation by generator.
+      - name: core_eia930__hourly_net_generation_by_energy_source
+        description: EIA-930 hourly net generation by BA + energy source.

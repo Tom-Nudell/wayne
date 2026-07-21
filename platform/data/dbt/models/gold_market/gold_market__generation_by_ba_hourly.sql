@@ -1,15 +1,16 @@
 -- Gold market mart: hourly generation by BA + fuel type.
 --
--- Stub for the first slice. Populated from EIA-930 (BA-level) plus
--- GridStatus (ISO-level, when finer resolution is needed). The schema
--- intentionally matches ``gold_market__load_hourly`` on the time/BA keys
--- so ``query_grid`` can join them for net-load calculations.
+-- Populated from EIA-930 via PUDL (all US BAs, hourly). GridStatus
+-- fuel-mix partitions can be unioned in later where finer intra-ISO
+-- resolution is needed; the EIA-930 series is the national baseline.
+-- Schema matches ``gold_market__load_hourly`` on the time/BA keys so
+-- ``query_grid`` can join them for net-load calculations.
 
 select
-    cast(null as varchar) as balancing_authority,
-    cast(null as timestamp) as interval_start_utc,
-    cast(null as varchar) as fuel_type,
-    cast(null as double) as generation_mwh,
-    cast(null as varchar) as source,
-    cast(null as varchar) as license
-where 1 = 0
+    balancing_authority,
+    interval_start_utc,
+    fuel_type,
+    generation_mwh,
+    source,
+    license
+from {{ ref('silver_pudl__eia930_generation') }}

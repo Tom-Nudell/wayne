@@ -48,9 +48,9 @@ planned_pudl_specs = [
         metadata={"status": "planned"},
     )
     for name, desc in (
-        ("core_eia860__scd_plants", "EIA-860 plants (slowly changing)"),
-        ("core_eia923__monthly_generation", "EIA-923 monthly generation by generator"),
-        ("core_eia930__hourly_operations", "EIA-930 hourly demand/generation by BA"),
+        # (eia860 plants, eia923 generation, and eia930 net generation have
+        # graduated into TABLES and materialize as real assets above.)
+        ("core_eia930__hourly_operations", "EIA-930 hourly demand/interchange by BA"),
         ("core_epacems__hourly_emissions", "EPA CEMS hourly emissions"),
         ("core_ferc714__hourly_planning_area_demand", "FERC-714 hourly demand"),
     )

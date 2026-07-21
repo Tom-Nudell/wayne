@@ -51,6 +51,16 @@ TABLES: tuple[PudlTable, ...] = (
         name="core_eia923__monthly_generation",
         description="EIA Form 923 monthly net generation by generator.",
     ),
+    PudlTable(
+        name="core_eia930__hourly_net_generation_by_energy_source",
+        description=(
+            "EIA-930 hourly net generation by balancing authority + energy "
+            "source. Feeds gold_market__generation_by_ba_hourly. ~83 MB / "
+            "116M rows; columns: datetime_utc, balancing_authority_code_eia, "
+            "generation_energy_source, net_generation_{adjusted,reported,"
+            "imputed_eia}_mwh."
+        ),
+    ),
 )
 
 # Stable URL for the nightly build. Pinned releases live under ``v{YYYY.MM.DD}``;

@@ -66,6 +66,24 @@ EPRI_FEEDERS = Source(
     license="BSD-3-Clause",
     notes="OpenDSS is BSD-3; the test feeders are EPRI-published reference cases",
 )
+USGS_USWTDB = Source(
+    name="usgs_uswtdb",
+    url="https://energy.usgs.gov/uswtdb/",
+    license="US-PD",
+    notes="US Wind Turbine Database — per-turbine locations + specs; eia_id joins to EIA-860",
+)
+USGS_USPVDB = Source(
+    name="usgs_uspvdb",
+    url="https://energy.usgs.gov/uspvdb/",
+    license="US-PD",
+    notes="US Large-Scale Solar PV Database — per-facility footprints + specs",
+)
+OPEN_METEO = Source(
+    name="open_meteo",
+    url="https://open-meteo.com/",
+    license="CC-BY-4.0",
+    notes="NWP forecast aggregator; attribution required for redistribution",
+)
 
 # Sources deliberately deferred until we can confirm a fully-open subset:
 #   * Global Energy Monitor — tiered; some trackers require commercial licensing.
