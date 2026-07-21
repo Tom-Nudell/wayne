@@ -11,14 +11,14 @@
 // (auth, tiers, queueing, rate limits) is Phase 4's agent seam.
 
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
 import { env as privateEnv } from '$env/dynamic/private';
 
-import type { StudyEvent, StudyRequest } from '@wayne/api';
+import type { StudyEvent, StudyKind, StudyRequest } from '@wayne/api';
 
 import type { RequestHandler } from './$types';
 
@@ -35,9 +35,17 @@ function orchestratorPython(root: string): string {
   return path.join(root, 'platform', 'orchestrator', '.venv', 'bin', 'python');
 }
 
-// CLI arguments for the run. The canonical map-click N-1 runs the learned
-// n1_contingency workflow — fixed steps, zero planner round-trips (see
-// wayne-workflows-brief.md §4). Free-form goals still take the agent path.
+// Fixed workflows the map may launch, and the scenario-name template each
+// uses. Anything else on `body.study` is rejected rather than passed to
+// the CLI — the request body is untrusted input, never an argv source.
+const STUDIES: Record<StudyKind, { workflow: string; labelPrefix: string }> = {
+  n1_contingency: { workflow: 'n1_contingency', labelPrefix: 'N-1 near' },
+  dc_opf: { workflow: 'dc_opf', labelPrefix: 'Price map near' }
+};
+
+// CLI arguments for the run. Map-click studies run a fixed workflow —
+// zero planner round-trips (see wayne-workflows-brief.md §4). Free-form
+// goals still take the agent path.
 function studyArgs(body: StudyRequest, overlayDir: string): string[] | null {
   const common = ['-m', 'gridagent_orchestrator.run', '--stream-events'];
   // The body is an unvalidated cast — coerce defensively so a malformed
@@ -47,19 +55,75 @@ function studyArgs(body: StudyRequest, overlayDir: string): string[] | null {
   }
   const f = body.fromFeature;
   if (!f || typeof f !== 'object' || typeof f.feature_id !== 'string') return null;
+  const study = STUDIES[(body.study ?? 'n1_contingency') as StudyKind];
+  if (!study) return null;
   const name = typeof f.name === 'string' ? f.name : '';
   const kind = typeof f.kind === 'string' ? f.kind : 'feature';
   const label = name ? `${name} (${f.feature_id})` : f.feature_id;
-  const inputs = { scenario_name: `N-1 near ${kind} ${label}` };
+  const inputs = { scenario_name: `${study.labelPrefix} ${kind} ${label}` };
   return [
     ...common,
     '--workflow',
-    'n1_contingency',
+    study.workflow,
     '--inputs',
     JSON.stringify(inputs),
     '--atlas-overlay-dir',
     overlayDir
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Studyable gating: studies launch only from real, data-backed features.
+// The tile bundle stamps `synthetic` on every feature; we rebuild that
+// index server-side (never trusting the client's copy of the flag) from
+// the bundle's source GeoJSON. Unknown feature_ids are rejected too — a
+// well-behaved client can only send ids that exist in the tiles.
+// ---------------------------------------------------------------------------
+
+type StudyableIndex = { known: Set<string>; synthetic: Set<string> } | null;
+let studyableIndex: StudyableIndex | undefined;
+
+function loadStudyableIndex(root: string): StudyableIndex {
+  if (studyableIndex !== undefined) return studyableIndex;
+  const tileDir = path.join(root, 'data_root', 'bundle', 'snapshot_latest', 'tiles');
+  const known = new Set<string>();
+  const synthetic = new Set<string>();
+  let sawAny = false;
+  for (const stem of ['plant', 'substation']) {
+    const p = path.join(tileDir, `${stem}.geojson`);
+    if (!existsSync(p)) continue;
+    try {
+      const fc = JSON.parse(readFileSync(p, 'utf8')) as {
+        features?: Array<{ properties?: Record<string, unknown> }>;
+      };
+      for (const feat of fc.features ?? []) {
+        const id = feat.properties?.feature_id;
+        if (typeof id !== 'string') continue;
+        sawAny = true;
+        known.add(id);
+        const syn = feat.properties?.synthetic;
+        if (syn === true || syn === 'true' || syn === 1) synthetic.add(id);
+      }
+    } catch {
+      // Corrupt tile source — treat as absent rather than blocking studies.
+    }
+  }
+  // No tile bundle at all (fresh checkout): gate off, don't brick the dev loop.
+  studyableIndex = sawAny ? { known, synthetic } : null;
+  return studyableIndex;
+}
+
+/** Returns an error message when the feature must not launch a study. */
+function studyableRejection(root: string, featureId: string): string | null {
+  const index = loadStudyableIndex(root);
+  if (index === null) return null;
+  if (index.synthetic.has(featureId)) {
+    return `feature ${featureId} is synthetic — no real data backs it, so studies are disabled`;
+  }
+  if (!index.known.has(featureId)) {
+    return `feature ${featureId} is not in the current tile bundle`;
+  }
+  return null;
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -85,7 +149,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
   const args = studyArgs(body, overlayDir);
   if (!args) {
-    throw error(400, 'goal or fromFeature required');
+    throw error(400, 'goal or fromFeature required (study must be a known kind)');
+  }
+
+  if (body.fromFeature && typeof body.fromFeature.feature_id === 'string') {
+    const rejection = studyableRejection(root, body.fromFeature.feature_id);
+    if (rejection) {
+      throw error(422, rejection);
+    }
   }
 
   const child = spawn(python, args, {
@@ -133,14 +204,20 @@ export const POST: RequestHandler = async ({ request }) => {
           try {
             const record = JSON.parse(line) as Record<string, unknown>;
             if (record.event === 'overlay') {
-              // Rewrite the on-disk overlay dir to the URL the static
-              // server exposes it at.
+              // Rewrite the on-disk overlay dir to the URLs the static
+              // server exposes the files at. run.py names every overlay
+              // it wrote; fall back to the n1 filename for old streams.
               const episodeId = String(record.episode_id ?? '');
+              const names = Array.isArray(record.overlays)
+                ? record.overlays.map(String)
+                : ['n1_contingency.geojson'];
+              const urls = names.map((n) => `/overlays/${episodeId}/${n}`);
               send({
                 event: 'overlay',
                 episode_id: episodeId,
                 feature_count: Number(record.feature_count ?? 0),
-                overlay_url: `/overlays/${episodeId}/n1_contingency.geojson`
+                overlay_url: urls[0] ?? `/overlays/${episodeId}/n1_contingency.geojson`,
+                overlay_urls: urls
               });
             } else {
               send(record as unknown as StudyEvent);

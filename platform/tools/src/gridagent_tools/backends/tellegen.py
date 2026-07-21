@@ -51,11 +51,19 @@ def _import_powerio():
 
 
 def _tellegen_bin() -> str:
-    binary = os.environ.get("GRIDAGENT_TELLEGEN_BIN") or shutil.which("tellegen")
+    # Resolution order: explicit env var, PATH, then the standard
+    # `cargo install` location (which login-less process trees — dev
+    # servers, launchd jobs — typically don't have on PATH).
+    cargo_bin = os.path.join(os.path.expanduser("~"), ".cargo", "bin", "tellegen")
+    binary = (
+        os.environ.get("GRIDAGENT_TELLEGEN_BIN")
+        or shutil.which("tellegen")
+        or (cargo_bin if os.path.exists(cargo_bin) else None)
+    )
     if not binary or not os.path.exists(binary) and shutil.which(binary) is None:
         raise BackendUnavailable(
-            "tellegen binary not found. Build it (cargo build --release -p "
-            "tellegen-cli) and set GRIDAGENT_TELLEGEN_BIN or add it to PATH."
+            "tellegen binary not found. Build it (cargo install --path "
+            "crates/tellegen-cli) and set GRIDAGENT_TELLEGEN_BIN or add it to PATH."
         )
     return binary
 

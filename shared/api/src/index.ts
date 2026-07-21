@@ -71,15 +71,20 @@ export interface ExportJob {
 // StudyEvent per line, streamed as the agent runs.
 // ---------------------------------------------------------------------------
 
+/** Fixed workflows the map can launch directly (see orchestrator workflows/). */
+export type StudyKind = "n1_contingency" | "dc_opf";
+
 export interface StudyRequest {
   /** Free-form study goal. Mutually exclusive with fromFeature. */
   readonly goal?: string;
   /**
-   * Map-click shorthand: run the canonical N-1 workflow. The feature labels
-   * the scenario; the screen itself is grid-wide (locational scoping is
+   * Map-click shorthand: run a fixed workflow. The feature labels the
+   * scenario; the study itself is grid-wide (locational scoping is
    * Phase 2 parameter-extraction work — see wayne-workflows-brief.md §8 Q4).
    */
   readonly fromFeature?: StudyFeatureRef;
+  /** Which fixed workflow to run for fromFeature. Default: n1_contingency. */
+  readonly study?: StudyKind;
 }
 
 export interface StudyFeatureRef {
@@ -107,7 +112,10 @@ export type StudyEvent =
   | {
       readonly event: "workflow";
       readonly workflow: string;
-      readonly nodes: ReadonlyArray<{ readonly id: string; readonly tool: string }>;
+      readonly nodes: ReadonlyArray<{
+        readonly id: string;
+        readonly tool: string;
+      }>;
       readonly ts: number;
     }
   | {
@@ -133,8 +141,11 @@ export type StudyEvent =
       readonly event: "overlay";
       readonly episode_id: string;
       readonly feature_count: number;
-      /** URL path the overlay GeoJSON is served at (web/static). */
+      /** URL path of the primary overlay GeoJSON (first written). */
       readonly overlay_url: string;
+      /** Every overlay URL this episode produced (n1_contingency.geojson,
+       * dc_opf.geojson, …). overlay_url is always overlay_urls[0]. */
+      readonly overlay_urls?: ReadonlyArray<string>;
     }
   | { readonly event: "finish"; readonly summary: string; readonly ts: number }
   | { readonly event: "error"; readonly message: string };

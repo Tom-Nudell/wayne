@@ -99,6 +99,71 @@ def build_n1_overlay_features(
 # ---------------------------------------------------------------------------
 
 
+def build_dc_opf_overlay_features(
+    *,
+    lmp: list[dict[str, Any]],
+    binding_branches: list[str],
+    snapshot: Snapshot,
+) -> list[dict[str, Any]]:
+    """Bus Points colored by LMP + binding branches as LineStrings.
+
+    Every bus with coordinates gets a ``kind: "lmp"`` Point carrying
+    ``lmp_usd_per_mwh``; branches at their thermal limit get a
+    ``kind: "binding"`` LineString so the map can show *why* the price
+    surface separates where it does.
+    """
+    buses = snapshot.buses().set_index("bus_id")
+    branches = snapshot.branches()
+    branch_key = branches["branch_id"].astype(str)
+
+    features: list[dict[str, Any]] = []
+    for row in lmp:
+        bid = str(row.get("bus_id", ""))
+        try:
+            b = buses.loc[bid]
+        except KeyError:
+            continue
+        lat, lon = float(b["lat"]), float(b["lon"])
+        if lat != lat or lon != lon:  # NaN check
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "kind": "lmp",
+                    "bus_id": bid,
+                    "lmp_usd_per_mwh": float(row.get("lmp_usd_per_mwh", 0.0)),
+                },
+            }
+        )
+
+    for bid in binding_branches:
+        row = branches.loc[branch_key == str(bid)]
+        if row.empty:
+            continue
+        r = row.iloc[0]
+        try:
+            fb = buses.loc[str(r.from_bus_id)]
+            tb = buses.loc[str(r.to_bus_id)]
+        except KeyError:
+            continue
+        coords = [
+            [float(fb["lon"]), float(fb["lat"])],
+            [float(tb["lon"]), float(tb["lat"])],
+        ]
+        if any(c != c for pair in coords for c in pair):  # NaN check
+            continue
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "LineString", "coordinates": coords},
+                "properties": {"kind": "binding", "branch_id": str(bid)},
+            }
+        )
+    return features
+
+
 def write_geojson_overlay(
     episode_id: str,
     tool_name: str,
@@ -174,9 +239,10 @@ def write_episode_overlays(
     Output layout::
 
         {overlay_dir}/{episode_id}/n1_contingency.geojson   (if N-1 ran)
+        {overlay_dir}/{episode_id}/dc_opf.geojson           (if DC OPF ran)
         {overlay_dir}/{episode_id}/provenance.json
 
-    Returns ``(total_feature_count, episode_id)``.
+    Returns ``(total_feature_count, episode_id, overlay_filenames)``.
     """
     bundle_root = bundle_root or _bundle_root()
     records = _parse_log(episode_log)
@@ -239,6 +305,54 @@ def write_episode_overlays(
             pass
         break
 
+    # DC OPF price surface — same last-step-wins rule as N-1.
+    for rec in reversed(steps):
+        if rec.get("tool") != "run_dc_opf":
+            continue
+        args = rec.get("arguments") or {}
+        scenario_id = args.get("scenario_id")
+        if not scenario_id:
+            break
+        value = rec.get("value") or {}
+        lmp = value.get("lmp") or []
+        if not lmp:
+            break
+        try:
+            scenario = load_scenario(str(scenario_id))
+            snapshot_id = scenario.get("snapshot_id")
+            if not snapshot_id:
+                candidates = sorted(
+                    (p for p in bundle_root.iterdir() if p.is_dir() and p.name.startswith("snapshot_") and (p / "buses.parquet").exists()),
+                    reverse=True,
+                )
+                if not candidates:
+                    break
+                snapshot_id = candidates[0].name
+            snapshot = Snapshot.at(bundle_root / snapshot_id)
+            features = build_dc_opf_overlay_features(
+                lmp=lmp,
+                binding_branches=[str(b) for b in value.get("binding_branches") or []],
+                snapshot=snapshot,
+            )
+            write_geojson_overlay(
+                episode_id,
+                "dc_opf",
+                features,
+                {
+                    "description": "DC OPF locational marginal prices",
+                    "units": "$/MWh",
+                    "source_table": "buses",
+                    "objective_usd_per_hour": value.get("objective_usd_per_hour"),
+                    "executor": args.get("executor", ""),
+                },
+                overlay_dir=overlay_dir,
+            )
+            overlays_written.append("dc_opf.geojson")
+            total_features += len(features)
+        except Exception:
+            pass
+        break
+
     model = os.environ.get("GRIDAGENT_LLM_MODEL", "gemma4:e12b")
     write_provenance(
         episode_id,
@@ -250,7 +364,7 @@ def write_episode_overlays(
         overlay_dir=overlay_dir,
     )
 
-    return total_features, episode_id
+    return total_features, episode_id, overlays_written
 
 
 def write_n1_overlay_from_episode(
@@ -348,7 +462,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.overlay_dir:
         try:
-            n, episode_id = write_episode_overlays(
+            n, episode_id, _overlays = write_episode_overlays(
                 args.episode_log,
                 args.overlay_dir,
                 bundle_root=args.bundle_root,

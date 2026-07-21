@@ -129,7 +129,7 @@ def _export_overlays(
     from .overlay_export import write_episode_overlays
 
     try:
-        n, ep_id = write_episode_overlays(episode.log_path, atlas_overlay_dir)
+        n, ep_id, overlays = write_episode_overlays(episode.log_path, atlas_overlay_dir)
         if n == 0:
             # Nothing was written (e.g. a clean screen with zero overloads).
             # Emitting an overlay event here would hand the client a URL
@@ -147,6 +147,7 @@ def _export_overlays(
                     "episode_id": ep_id,
                     "feature_count": n,
                     "overlay_dir": str(ep_dir),
+                    "overlays": overlays,
                 }
             )
     except (ValueError, FileNotFoundError) as exc:
