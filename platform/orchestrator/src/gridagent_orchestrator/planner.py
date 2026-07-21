@@ -38,6 +38,14 @@ _DEFAULT_BASE_URL = "http://localhost:11434/v1"
 _DEFAULT_MODEL = "gemma4:e12b"
 
 
+# NOTE ON THE "CRITICAL RULES" BELOW: they are MVP-era guardrails, not
+# platform invariants. The ≤2-calls bound and the never-ask-clarification
+# rule exist because the current local models (gemma4-class) loop and stall
+# without them — they deliberately trade capability for predictability.
+# The ask-back seam (workflows brief §6.1) and iterative multi-study
+# reasoning are expected to RELAX these rules; do not design around them
+# as if they were gospel, and revisit them whenever the model tier or the
+# session model (chat overlay) changes.
 _INSTRUCTIONS = """\
 You drive an autonomous power-grid analysis platform. Your only way to
 affect the world is through the registered tools — never invent numbers,
