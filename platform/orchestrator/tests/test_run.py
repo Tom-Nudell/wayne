@@ -72,6 +72,9 @@ def stubbed_tools(monkeypatch):
 @pytest.fixture
 def episode_root(tmp_path, monkeypatch):
     monkeypatch.setenv("GRIDAGENT_EPISODE_ROOT", str(tmp_path))
+    # The run paths also touch the ledger (commit + staleness refresh);
+    # keep those writes out of the developer's real data_root.
+    monkeypatch.setenv("GRIDAGENT_DATA_ROOT", str(tmp_path / "data_root"))
     return tmp_path
 
 

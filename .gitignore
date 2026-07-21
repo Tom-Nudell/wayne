@@ -32,3 +32,9 @@ __pycache__/
 uv.lock
 .gstack/
 data_root/bundle/snapshot_latest/
+
+# Run artifacts (ledger entries are data, not code; episodes from CLI runs).
+# **/ so a run started from platform/orchestrator (cwd-relative data_root)
+# is caught too, not just one from the repo root.
+**/data_root/ledger/
+episodes/
