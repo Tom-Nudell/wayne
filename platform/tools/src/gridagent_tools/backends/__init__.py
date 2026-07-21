@@ -7,6 +7,9 @@ implement those actions against the canonical Snapshot:
   * ``pandapower`` — in-process Python (BSD-3); default while bringing things up.
   * ``sienna``     — NREL Sienna stack via subprocess or container; canonical
                      once Julia is available locally.
+  * ``tellegen``   — Rust OPF engine (MIT) via subprocess; DC OPF / AC PF with
+                     LMPs and sensitivities; same engine runs as WASM in the
+                     browser demo.
   * future         — PowerWorld bridge, custom GPU LODF, etc.
 
 Decoupling means the platform is no longer Sienna-anchored: Sienna is one
@@ -22,5 +25,6 @@ from .protocol import Backend, BackendUnavailable, get_backend, register_backend
 # shim registers itself but doesn't import Julia at module load.
 from . import pandapower as _pandapower  # noqa: F401
 from . import sienna as _sienna  # noqa: F401
+from . import tellegen as _tellegen  # noqa: F401
 
 __all__ = ["Backend", "BackendUnavailable", "get_backend", "register_backend"]

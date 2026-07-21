@@ -60,7 +60,7 @@ Our dispatch is already shaped for this (`study_tools.py`: executor strings; `ba
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **A. Executor** | `tellegen` backend via HTTP, `run_dc_opf` tool, compose service, parity smoke vs pandapower DC PF | nothing |
+| **A. Executor** ✅ | `tellegen` backend (CLI subprocess), `run_dc_opf` tool, parity + eval harness — shipped on this branch, see §8 | nothing |
 | **B. Browser engine** | `@tellegen/engine` in the demo web app; serve case JSON from snapshots via powerio; slider-preview interactions on real nodes | A (case bridge) |
 | **C. Study record** | `.pio.json` study blocks as the persistent study ledger; every `run_*` appends a commit with provenance | A |
 | **D. Demo UI** (§6) | greyout, study-first view, results overlays | B, C |
@@ -83,9 +83,88 @@ Inspected via headless browser (map itself needs WebGL, so layers were read from
 - **Feature modules visible in source:** site analysis/scoring/report, voltage headroom, comparison panel, asset placer, pipeline mode, forecast panel (open-meteo adapter), CSV export, price ticker, chat.
 - **Takeaways for Wayne:** (1) PMTiles is the right shape for our static overlay bundles too — our 677MB locally-built tile bundle problem is exactly what PMTiles solves; (2) their "site analysis" pattern (click anywhere → scored report from loaded layers) is the static-data cousin of our "click a node → run a study" — the differentiator we should lean into is that Wayne's numbers come from live solves, not precomputed rasters.
 
-## 8. Open questions
+## 8. Measured results (2026-07-03, RTS-GMLC snapshot, 73 buses / 120 branches / 158 gens)
 
-1. **HTTP vs PyO3 for the tellegen executor** — HTTP first is low-risk; measure the hop on ACTIVSg-scale cases before investing in bindings.
+Phase A is implemented on this branch: `backends/tellegen.py` (subprocess over
+the `tellegen` CLI — stateless network-JSON-on-stdin turned out simpler than
+the HTTP server for v1; the server remains the browser/deploy path), `dc_opf`
+on the Backend protocol with pandapower and tellegen implementations,
+`run_dc_opf` in the tool registry, tests in `platform/tools/tests/`, and the
+evaluation harness `platform/tools/eval/tellegen_eval.py` (results JSON
+committed beside it). Numbers below from that harness.
+
+### 8.1 Correctness: tellegen is right, our pandapower DC OPF is not
+
+Identical MATPOWER input into three solvers:
+
+| solver | objective $/h | LMP range | duals |
+|---|---:|---|---|
+| scipy/HiGHS reference LP | 177,338 | −8.42 … 30.00 | — |
+| tellegen dcopf | 177,363 (**+0.014%**) | −8.44 … 30.00 | ✓ |
+| pandapower `rundcopp` | 162,100 (**−8.6%**) | — | `lam_p` ≈ 1e-10, unusable |
+
+pandapower's objective sits *below* the feasible optimum — its solution
+violates line limits (it is not enforcing them on this case), and its LMP
+duals come back zero. **Any prices-on-map work must not use `rundcopp`.**
+Tellegen matches an independent LP to 2 bps, with sane congestion LMPs
+(3 binding lines, negative LMP pockets).
+
+Also found and fixed while wiring this up: both backends' "midpoint"
+starting dispatch left ~15% of RTS load on the slack bus and the *base-case*
+AC power flow had been returning `converged: false`. Dispatch is now
+proportional-to-capacity scaled to load; pandapower AC PF converges on the
+base case.
+
+### 8.2 Latency (M-series laptop, subprocess overhead included)
+
+| operation | time |
+|---|---:|
+| tellegen DC OPF (full solve, LMPs+flows+dispatch) | **9.6 ms** |
+| snapshot → network JSON bridge | 8.4 ms |
+| pandapower `rundcopp` (and wrong, per above) | 23 ms |
+| pandapower full LODF N-1 screen | 500 ms |
+| powerio native LODF matrix (Rust, in-process) | **3.9 ms** |
+| powerio native PTDF | 1.7 ms |
+| 24-period DC OPF price sweep (est.) | 0.24 s |
+
+### 8.3 Verdicts on the three strategic options
+
+**(1) Tellegen as pre-compute conditioner — narrow yes, different shape than
+expected.** A tellegen base-case solve ranks branches whose top-20 covers 79%
+of the branches that actually overload in the full N-1 (94% of overload
+pairs), in 10 ms vs 500 ms. But restricting the monitored set doesn't speed
+up the LODF screen itself (matrix build dominates), and a screen that drops
+6% of overloads is a prioritizer, not a filter. The measured win hiding
+underneath: **powerio's Rust LODF is ~130× faster than our
+pandapower/pypower path** (3.9 ms vs 500 ms). Recommendation: use tellegen
+for the base point + prices, rebuild the N-1 kernel on powerio PTDF/LODF, and
+revisit "conditioning" when we hit ACTIVSg7000-scale grids where full screens
+genuinely hurt.
+
+**(2) Port Sienna to Rust / holomorphic embedding — not now, and not as a
+port.** The measured robustness gap is real but it is an *initialization*
+gap, not a language gap: tellegen's flat-start Newton fails on our stressed
+base case (105° angle spread) where pandapower's DC-initialized Newton
+converges up to 1.4× load; DC OPF stays feasible to 1.6×. The cheap,
+high-value move is contributing a DC-init warm start to tellegen upstream
+(they're the same Newton otherwise). HELM-class methods only pay off in the
+1.4×–1.6× nose region — a voltage-stability product feature we don't have on
+the roadmap. Park it; no Sienna port.
+
+**(3) OPF → SCOPF prices on the map — strong yes, this is the winner.**
+Verified-correct LMPs in 10 ms means live price choropleths, 24-period
+sweeps in a quarter second, and slider-interactive what-ifs are all in
+budget today at RTS scale. Path: `run_dc_opf` (done, this branch) → LMP
+overlay contract (§6.4) → preventive SCOPF via powerio-prob's
+`ScopfInstance`/GOC3 machinery + tellegen solves per contingency (the 94%
+screen from (1) picks the contingency set) → hourly production-cost prices
+replacing the pandapower stopgap. Note: the SOCWR formulation needs the
+`conic` cargo feature (not in the default CLI build); rebuild with
+`--features conic` when we want AC-quality price bounds.
+
+## 9. Open questions
+
+1. **CLI subprocess vs PyO3 for the tellegen executor** — *(updated: shipped as CLI subprocess, ~10 ms/solve including process spawn at RTS scale)*. Revisit bindings only if ACTIVSg-scale cases make spawn+serialize costs material.
 2. **Solver trust boundary** — tellegen's DC OPF fits piecewise-linear costs to quadratics (documented in `formulations.md`); acceptable for demo LMPs, needs a flag in results provenance so study records say which cost model produced them.
 3. **`.pio.json` schema maturity** — pin the schema version we adopt and vendor the JSON Schema files; the format is 0.x and explicitly still moving.
 4. **How `studyable` is decided** (§6.1) — snapshot-derived only, or also solver-derived (island/convergence checks)? Lean: snapshot-derived v1, refine with solver feedback.
