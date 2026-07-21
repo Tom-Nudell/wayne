@@ -66,6 +66,11 @@ result you will receive a ModelRetry — revise and retry that single step only.
 
 STANDARD OPENING (always):
   1. ``list_data_snapshots`` once. Use the first snapshot_id everywhere.
+  2. ``query_ledger`` once with the study intent and subject (bus/branch if
+     the goal names one). If a fresh equivalent entry exists, cite its
+     entry_id and findings in your summary instead of re-running the same
+     study; run anew only if the question, subject, or scenario differs or
+     the entry is stale.
 
 CHOOSING THE STUDY — match the goal's intent:
   - overloads / contingencies / reliability / outages
@@ -143,7 +148,7 @@ def _step_with_args(
     # Repetition guard: orientation tools (list_data_snapshots, query_grid) are
     # one-shot steps. If the model calls them more than twice it is stuck in a
     # loop — force REPLAN so it moves on.
-    _ONE_SHOT_TOOLS = {"list_data_snapshots", "query_grid"}
+    _ONE_SHOT_TOOLS = {"list_data_snapshots", "query_grid", "query_ledger"}
     if tool_name in _ONE_SHOT_TOOLS and deps.call_totals[tool_name] > 2:
         signal = {**signal, "_replan_reason": f"{tool_name} called {deps.call_totals[tool_name]} times — proceed to create_scenario"}
         decision = Decision.REPLAN
@@ -361,5 +366,26 @@ def make_agent(
         )
         args = {"bus_id": bus_id, "p_mw": p_mw, "scenario_id": scenario_id}
         return _step_with_args(ctx, "run_injection_study", args, result.value, result.signal)
+
+    @agent.tool
+    def query_ledger(
+        ctx: RunContext[OrchestratorDeps],
+        intent: str | None = None,
+        bus_id: str | None = None,
+        branch_id: str | None = None,
+        text: str | None = None,
+    ) -> Any:
+        """Search the study ledger (system of record): has an equivalent
+        study already been run, and what did it conclude?
+
+        Call once at the start. Cite fresh matches (entry_id + findings)
+        instead of re-running identical studies; a stale or missing match
+        means run the study.
+        """
+        result = _call_tool(
+            "query_ledger", intent=intent, bus_id=bus_id, branch_id=branch_id, text=text
+        )
+        args = {"intent": intent, "bus_id": bus_id, "branch_id": branch_id, "text": text}
+        return _step_with_args(ctx, "query_ledger", args, result.value, result.signal)
 
     return agent

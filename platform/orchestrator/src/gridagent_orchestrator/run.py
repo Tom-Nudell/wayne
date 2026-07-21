@@ -154,6 +154,29 @@ def _export_overlays(
         emit(f"Atlas overlay skipped: {exc}")
 
 
+def _commit_to_ledger(
+    episode: Episode,
+    workflow_name: str | None,
+    emit: Callable[[str], None],
+    on_event: EventCallback | None,
+) -> None:
+    """Entry ⇔ commit (study-ledger brief §3). A ledger failure must never
+    fail the study — the episode log is still the step-level record."""
+    from .ledger_commit import commit_episode
+
+    try:
+        entry_id = commit_episode(episode.log_path, workflow_name=workflow_name)
+    except Exception as exc:  # noqa: BLE001 -- record-keeping must not kill the run
+        emit(f"Ledger commit skipped: {exc}")
+        return
+    if entry_id is None:
+        emit("Ledger: retrieval-only episode, nothing committed.")
+        return
+    emit(f"Ledger: committed entry {entry_id}.")
+    if on_event is not None:
+        on_event({"event": "ledger", "entry_id": entry_id, "episode_id": episode.episode_id})
+
+
 def run_episode(
     goal: str,
     *,
@@ -179,6 +202,7 @@ def run_episode(
         verifier=verifier or Verifier.default(),
     )
     _export_overlays(episode, atlas_overlay_dir, emit, on_event)
+    _commit_to_ledger(episode, None, emit, on_event)
     return episode
 
 
@@ -271,6 +295,7 @@ def run_workflow_episode(
         )
 
     _export_overlays(episode, atlas_overlay_dir, emit, on_event)
+    _commit_to_ledger(episode, name, emit, on_event)
     return episode
 
 
