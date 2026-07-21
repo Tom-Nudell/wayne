@@ -39,6 +39,7 @@
     "@sveltejs/adapter-vercel": "^5.5.0",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^20.16.0",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",

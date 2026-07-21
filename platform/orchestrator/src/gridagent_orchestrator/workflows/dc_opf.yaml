@@ -1,0 +1,43 @@
+# DC OPF price surface — the "prices on the map" workflow. Same fixed-
+# workflow shape as n1_contingency: zero planner calls, parameters only.
+#
+# Executor is pinned to tellegen: it is the engine whose LMPs match an
+# independent HiGHS reference to 0.014% (brief §8.1); the pandapower
+# dc_opf twin exists for objective/flow parity checks but its LMP duals
+# come back zero and must not feed the price overlay.
+workflow: dc_opf
+description: >-
+  Solve a DC OPF on the newest snapshot and surface LMPs, dispatch, and
+  binding branches — the price choropleth study.
+
+goal: >-
+  Run the DC OPF price workflow for "{inputs.scenario_name}": newest
+  snapshot, tellegen solve, LMPs drawn on the map.
+
+inputs:
+  scenario_name:
+    default: DC OPF baseline
+  change_table:
+    default: {}
+
+nodes:
+  - id: snapshot
+    tool: list_data_snapshots
+
+  - id: scenario
+    tool: create_scenario
+    bind:
+      name: $inputs.scenario_name
+      change_table: $inputs.change_table
+      snapshot_id: $snapshot.latest
+
+  - id: opf
+    tool: run_dc_opf
+    bind:
+      scenario_id: $scenario.scenario_id
+      executor: tellegen
+
+summary: >-
+  DC OPF on {snapshot.latest}: {opf.solver_status}, system cost
+  {opf.objective} $/h, LMPs {opf.lmp_min}–{opf.lmp_max} $/MWh with
+  {opf.n_binding} binding branch(es).

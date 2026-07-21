@@ -130,8 +130,8 @@
       <p>{finish.summary}</p>
       {#if overlay && overlay.event === 'overlay'}
         <p class="overlay-note">
-          {overlay.feature_count} overloaded branch{overlay.feature_count === 1 ? '' : 'es'} drawn on
-          the map.
+          {overlay.feature_count} result feature{overlay.feature_count === 1 ? '' : 's'} drawn on the
+          map.
         </p>
       {/if}
     </div>

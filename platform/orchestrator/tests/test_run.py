@@ -141,12 +141,16 @@ def test_export_overlays_suppresses_event_when_empty(tmp_path, monkeypatch):
     import gridagent_orchestrator.overlay_export as oe
 
     episode = Episode.new(goal="g", root=tmp_path)
-    monkeypatch.setattr(oe, "write_episode_overlays", lambda log, d: (0, episode.episode_id))
+    monkeypatch.setattr(oe, "write_episode_overlays", lambda log, d: (0, episode.episode_id, []))
     events: list[dict] = []
     _export_overlays(episode, tmp_path, emit=lambda m: None, on_event=events.append)
     assert events == []  # no overlay event → no 404 URL handed to the client
 
-    monkeypatch.setattr(oe, "write_episode_overlays", lambda log, d: (3, episode.episode_id))
+    monkeypatch.setattr(
+        oe,
+        "write_episode_overlays",
+        lambda log, d: (3, episode.episode_id, ["n1_contingency.geojson"]),
+    )
     _export_overlays(episode, tmp_path, emit=lambda m: None, on_event=events.append)
     assert [e["event"] for e in events] == ["overlay"]
     assert events[0]["feature_count"] == 3

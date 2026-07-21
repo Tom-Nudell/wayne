@@ -8,9 +8,13 @@
 // branching hyphae for transmission, fruiting bodies for plants. Alarm
 // colors are reserved for scenario overlays.
 
-import type { LayerSpecification, SourceSpecification } from 'maplibre-gl';
+import type {
+  ExpressionSpecification,
+  LayerSpecification,
+  SourceSpecification,
+} from "maplibre-gl";
 
-import { PALETTE } from '../palette.js';
+import { PALETTE } from "../palette.js";
 
 export interface WayneSourceConfig {
   /** Base URL for PMTiles archives (e.g. `/tiles` in dev, R2 URL in prod). */
@@ -18,31 +22,43 @@ export interface WayneSourceConfig {
 }
 
 export function wayneSources(
-  cfg: WayneSourceConfig
+  cfg: WayneSourceConfig,
 ): Record<string, SourceSpecification> {
   const t = (name: string): SourceSpecification => ({
-    type: 'vector',
-    url: `pmtiles://${cfg.tileBase}/${name}.pmtiles`
+    type: "vector",
+    url: `pmtiles://${cfg.tileBase}/${name}.pmtiles`,
   });
   // Note: wayne-queue-projects is intentionally absent until the LBNL
   // Queued Up bronze loader produces real per-project coordinates. The
   // interconnection_fyi_public scraper jitters coordinates around state
   // centroids, which renders as visible rectangles on the map.
   return {
-    'wayne-transmission-lines': t('transmission_lines'),
-    'wayne-substations': t('substations'),
-    'wayne-plants': t('plants'),
-    'wayne-gas-pipelines': t('gas_pipelines')
+    "wayne-transmission-lines": t("transmission_lines"),
+    "wayne-substations": t("substations"),
+    "wayne-plants": t("plants"),
+    "wayne-gas-pipelines": t("gas_pipelines"),
   };
 }
 
+// Synthetic features carry no real data backing, so studies are disabled
+// on them (see /api/study gating). They render desaturated and quiet —
+// visibly present, visibly not-load-bearing. Tippecanoe may stringify the
+// boolean, so match both representations.
+const IS_SYNTHETIC: ExpressionSpecification = [
+  "any",
+  ["==", ["get", "synthetic"], true],
+  ["==", ["get", "synthetic"], "true"],
+];
+
+const SYNTHETIC_GREY = "#b3ab9e";
+
 // Hyphae paint — voltage maps to a warm earth gradient (moss → heartwood)
 // rather than engineering primaries. Higher voltage = older, woodier hyphae.
-const HYPHAE_PAINT: LayerSpecification['paint'] = {
-  'line-color': [
-    'interpolate',
-    ['linear'],
-    ['coalesce', ['get', 'voltage_kv'], 0],
+const HYPHAE_PAINT: LayerSpecification["paint"] = {
+  "line-color": [
+    "interpolate",
+    ["linear"],
+    ["coalesce", ["get", "voltage_kv"], 0],
     0,
     PALETTE.loam500,
     115,
@@ -54,81 +70,81 @@ const HYPHAE_PAINT: LayerSpecification['paint'] = {
     500,
     PALETTE.hypha500,
     765,
-    PALETTE.hypha765
+    PALETTE.hypha765,
   ],
-  'line-width': [
-    'interpolate',
-    ['exponential', 1.4],
-    ['zoom'],
+  "line-width": [
+    "interpolate",
+    ["exponential", 1.4],
+    ["zoom"],
     3,
     0.4,
     8,
     1.6,
     12,
-    3.4
+    3.4,
   ],
-  'line-opacity': 0.85
+  "line-opacity": 0.85,
 };
 
 export const wayneLayers: LayerSpecification[] = [
   // Hyphae: transmission as the branching network of a living mat.
   {
-    id: 'wayne-transmission-lines',
-    type: 'line',
-    source: 'wayne-transmission-lines',
-    'source-layer': 'transmission_lines',
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: HYPHAE_PAINT
+    id: "wayne-transmission-lines",
+    type: "line",
+    source: "wayne-transmission-lines",
+    "source-layer": "transmission_lines",
+    layout: { "line-cap": "round", "line-join": "round" },
+    paint: HYPHAE_PAINT,
   },
   // Subtle gas pipelines — visible but quiet against transmission.
   {
-    id: 'wayne-gas-pipelines',
-    type: 'line',
-    source: 'wayne-gas-pipelines',
-    'source-layer': 'gas_pipelines',
-    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    id: "wayne-gas-pipelines",
+    type: "line",
+    source: "wayne-gas-pipelines",
+    "source-layer": "gas_pipelines",
+    layout: { "line-cap": "round", "line-join": "round" },
     paint: {
-      'line-color': PALETTE.loam500,
-      'line-width': [
-        'interpolate',
-        ['exponential', 1.3],
-        ['zoom'],
+      "line-color": PALETTE.loam500,
+      "line-width": [
+        "interpolate",
+        ["exponential", 1.3],
+        ["zoom"],
         4,
         0.3,
         8,
         1.0,
         12,
-        2.2
+        2.2,
       ],
-      'line-opacity': 0.55,
-      'line-dasharray': [3, 2]
-    }
+      "line-opacity": 0.55,
+      "line-dasharray": [3, 2],
+    },
   },
   // Nodes where hyphae braid: substations as small spore points.
   {
-    id: 'wayne-substations',
-    type: 'circle',
-    source: 'wayne-substations',
-    'source-layer': 'substations',
+    id: "wayne-substations",
+    type: "circle",
+    source: "wayne-substations",
+    "source-layer": "substations",
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 1.2, 10, 3.6],
-      'circle-color': PALETTE.bone,
-      'circle-stroke-color': PALETTE.loam900,
-      'circle-stroke-width': 0.6,
-      'circle-opacity': 0.9
-    }
+      "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 1.2, 10, 3.6],
+      "circle-color": ["case", IS_SYNTHETIC, SYNTHETIC_GREY, PALETTE.bone],
+      "circle-stroke-color": PALETTE.loam900,
+      "circle-stroke-width": ["case", IS_SYNTHETIC, 0.2, 0.6],
+      "circle-opacity": ["case", IS_SYNTHETIC, 0.35, 0.9],
+    },
   },
   // Fruiting bodies: generation plants, sized by capacity, colored by fuel family.
   {
-    id: 'wayne-plants',
-    type: 'circle',
-    source: 'wayne-plants',
-    'source-layer': 'plants',
+    id: "wayne-plants",
+    type: "circle",
+    source: "wayne-plants",
+    "source-layer": "plants",
     paint: {
-      'circle-radius': [
-        'interpolate',
-        ['linear'],
-        ['coalesce', ['get', 'capacity_mw'], 0],
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["coalesce", ["get", "capacity_mw"], 0],
         0,
         2,
         500,
@@ -136,29 +152,34 @@ export const wayneLayers: LayerSpecification[] = [
         2000,
         11,
         5000,
-        16
+        16,
       ],
-      'circle-color': [
-        'match',
-        ['get', 'fuel'],
-        'solar',
-        PALETTE.fuelSolar,
-        'wind',
-        PALETTE.fuelWind,
-        'natural_gas',
-        PALETTE.fuelGas,
-        'coal',
-        PALETTE.fuelCoal,
-        'nuclear',
-        PALETTE.fuelNuclear,
-        'hydro',
-        PALETTE.fuelHydro,
-        PALETTE.fuelOther
+      "circle-color": [
+        "case",
+        IS_SYNTHETIC,
+        SYNTHETIC_GREY,
+        [
+          "match",
+          ["get", "fuel"],
+          "solar",
+          PALETTE.fuelSolar,
+          "wind",
+          PALETTE.fuelWind,
+          "natural_gas",
+          PALETTE.fuelGas,
+          "coal",
+          PALETTE.fuelCoal,
+          "nuclear",
+          PALETTE.fuelNuclear,
+          "hydro",
+          PALETTE.fuelHydro,
+          PALETTE.fuelOther,
+        ],
       ],
-      'circle-stroke-color': PALETTE.loam900,
-      'circle-stroke-width': 0.5,
-      'circle-opacity': 0.85
-    }
+      "circle-stroke-color": PALETTE.loam900,
+      "circle-stroke-width": ["case", IS_SYNTHETIC, 0.2, 0.5],
+      "circle-opacity": ["case", IS_SYNTHETIC, 0.35, 0.85],
+    },
   },
   // Interconnection queue layer is intentionally omitted — see comment
   // in wayneSources(). It returns when LBNL Queued Up bronze data has

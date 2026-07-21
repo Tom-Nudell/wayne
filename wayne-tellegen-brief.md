@@ -162,7 +162,26 @@ replacing the pandapower stopgap. Note: the SOCWR formulation needs the
 `conic` cargo feature (not in the default CLI build); rebuild with
 `--features conic` when we want AC-quality price bounds.
 
-## 9. Open questions
+## 9. Next phases (logged 2026-07-21, per trn)
+
+1. **Study ledger as full system of record — design discussion required
+   before any implementation.** trn's vision is bigger than the §5C/§6.3
+   sketch ("full system of record — I don't think you have enough context
+   to appreciate yet"). powerio's `.pio.json` study blocks remain a
+   candidate substrate, but do not build until the design session happens.
+2. **Agent-first mode / broader agent overlay.** Today the agent can only
+   kick off N-1 contingency — not even injection/withdrawal studies. The
+   expectation: answer arbitrary grid questions, kick off any study type,
+   and *learn* new studies (workflows brief Tracks 2–3: distillation,
+   composition, glass overlay are the machinery). Early concrete steps:
+   injection/withdrawal study tools; route `run_dc_opf` through the agent;
+   free-text goal → study routing.
+
+In-flight now (branch `feat/live-map-lmp`): the first three §6/§8.3 items —
+LMP choropleth overlay, browser WASM engine with slider previews, and
+studyable-node gating. The ledger (§6.3) is explicitly deferred to (1).
+
+## 10. Open questions
 
 1. **CLI subprocess vs PyO3 for the tellegen executor** — *(updated: shipped as CLI subprocess, ~10 ms/solve including process spawn at RTS scale)*. Revisit bindings only if ACTIVSg-scale cases make spawn+serialize costs material.
 2. **Solver trust boundary** — tellegen's DC OPF fits piecewise-linear costs to quadratics (documented in `formulations.md`); acceptable for demo LMPs, needs a flag in results provenance so study records say which cost model produced them.

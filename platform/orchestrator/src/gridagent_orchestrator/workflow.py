@@ -78,6 +78,15 @@ ACTIVITY_PORTS: dict[str, dict[str, str]] = {
         "solver_status": "signal.solver_status",
         "slack_mw": "signal.slack_mw",
     },
+    "run_dc_opf": {
+        "solver_status": "signal.solver_status",
+        "objective": "signal.objective",
+        "lmp_min": "signal.lmp_min",
+        "lmp_max": "signal.lmp_max",
+        "lmp_spread": "signal.lmp_spread",
+        "n_binding": "signal.n_binding",
+        "lmp": "value.lmp",
+    },
 }
 
 
