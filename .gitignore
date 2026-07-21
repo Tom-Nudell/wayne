@@ -21,6 +21,9 @@ build/
 __pycache__/
 *.pyc
 
+# macOS
+.DS_Store
+
 # Per-package virtualenvs
 */.venv/
 .venv/
