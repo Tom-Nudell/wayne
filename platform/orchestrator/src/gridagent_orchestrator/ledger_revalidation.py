@@ -163,9 +163,17 @@ def revalidate_entry(entry_id: str, *, runner: Runner | None = None) -> dict[str
             f"entry {entry_id} has method type {method.get('type')!r}: only "
             "workflow entries re-run mechanically in v1"
         )
+    if method.get("inputs") is None:
+        # Entries committed without workflow_inputs (direct commit_episode
+        # callers) have no re-run recipe. Re-running with workflow defaults
+        # would silently study something else — refuse instead.
+        raise ValueError(
+            f"entry {entry_id} has no pinned method.inputs: not mechanically "
+            "re-runnable; re-run the study deliberately and supersede by hand"
+        )
 
     run = runner or _default_runner
-    new_id = run(str(method["name"]), dict(method.get("inputs") or {}))
+    new_id = run(str(method["name"]), dict(method["inputs"]))
     if not new_id:
         raise RuntimeError(
             f"revalidation run for {entry_id} finished without committing an entry"

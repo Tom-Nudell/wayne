@@ -15,9 +15,10 @@ immutable store of **entries**, one per committed study. Both episode paths
 (fixed workflow and free-form agent) commit automatically when they ran at
 least one study tool. Entries pin their dependencies (snapshot manifest
 hash, workflow spec hash, tool versions) at commit time; a lazy staleness
-pass compares those pins against the current world whenever the ledger is
-about to be consulted, and a revalidation write path re-runs stale workflow
-entries, linking old ⇢ new with a `conclusion_changed` verdict. The agent
+pass compares those pins against the current world at the start of both
+episode paths and via the CLI (`query_ledger` itself does **not** refresh —
+see §7), and a revalidation write path re-runs stale workflow entries,
+linking old ⇢ new with a `conclusion_changed` verdict. The agent
 reads the ledger through the `query_ledger` tool and is instructed to cite
 fresh prior findings instead of re-running identical studies.
 
@@ -110,8 +111,11 @@ Rules implemented in `ledger_commit.entry_from_episode`:
 - **Commit iff a study ran**: at least one `run_*` step with verifier
   decision `advance`. Episodes that only listed snapshots or queried the
   ledger are retrieval, not studies — they cite the record, never enter it.
-- **Last-advance wins**: a retried study tool commits only its final
-  ADVANCEd attempt; rejected attempts remain in the episode trace only.
+- **Last-advance wins — per tool name** (v1 limitation): a retried study
+  tool commits only its final ADVANCEd attempt, but the dedup key is the
+  tool name, so two *legitimate* `run_injection_study` calls in one
+  episode (e.g. two buses) also collapse to the last. Multi-instance
+  studies need either per-call keying or separate episodes today.
 - **Sub-solves are trace, not entries**: the episode JSONL stays the
   step-level record; `trace.episode_log` points at it.
 - **Scenario-less injection studies synthesize their delta**: a
@@ -140,9 +144,16 @@ Semantics that exist because live agent runs demanded them:
 - **System-wide entries match any element filter** — a whole-grid DC OPF
   is a hit for "what do we know about bus 309".
 - **Stale entries hide by default** but are counted: `n_stale_hidden` in
-  the result tells the agent that prior-but-outdated knowledge exists (it
-  can re-query with `include_stale` and ask for revalidation) — invisible
-  staleness would silently truncate the record.
+  the result signals that prior-but-outdated knowledge exists — invisible
+  staleness would silently truncate the record. Note: staleness flags are
+  only as fresh as the last `refresh_staleness()` pass; `query_ledger`
+  itself does not refresh, so direct registry consumers outside an episode
+  can see stale-but-unmarked entries (§7).
+- **The planner wrapper exposes a subset**: the agent gets `intent`,
+  `bus_id`, `branch_id`, `text` only. `snapshot_id`, `include_stale`, and
+  `limit` exist on the core tool but are not agent-reachable today — the
+  agent can *see* `n_stale_hidden` but cannot re-query with
+  `include_stale` itself.
 - Results are newest-first summaries: intent, question, subsystem, method,
   per-study signals, truncated summary, staleness state.
 
@@ -164,10 +175,12 @@ one. Unpinned dependencies never flag — absence of evidence is not
 divergence.
 
 **Lazy, per brief §6 decision**: `refresh_staleness()` is a flag-flip pass
-(hashing only, no solves) called from both episode paths at start — the
-moment the record is about to be consulted — and via the CLI. Already
-stale/superseded entries are skipped so the event log doesn't grow on
-re-checks.
+(hashing only, no solves) called from exactly three places: the start of
+`run_episode`, the start of `run_workflow_episode`, and the
+`gridagent-ledger refresh` CLI. It is **not** invoked by `query_ledger`,
+so a registry consumer querying outside an episode reads flags as of the
+last refresh. Already stale/superseded entries are skipped so the event
+log doesn't grow on re-checks.
 
 **Revalidation** (`revalidate_entry`):
 
@@ -207,8 +220,11 @@ re-checks.
 3. Ledger failures never fail a study run.
 4. Only episodes that ran a study tool commit; retrieval-only never does.
 5. A superseded entry is terminal; its successor carries the live claim.
-6. Every workflow entry is re-executable from its own method block
-   (name + inputs), and staleness is decidable from its own pins.
+6. Workflow entries committed through the episode paths pin their
+   resolved inputs and are re-executable from the method block alone;
+   entries lacking pinned inputs (direct `commit_episode` callers) are
+   refused by revalidation rather than re-run with defaults. Staleness is
+   decidable from any entry's own pins.
 7. Stale entries are hidden from default queries but never invisible
    (`n_stale_hidden`).
 
