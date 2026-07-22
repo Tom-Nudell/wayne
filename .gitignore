@@ -38,3 +38,5 @@ data_root/bundle/snapshot_latest/
 # is caught too, not just one from the repo root.
 **/data_root/ledger/
 episodes/
+data_root/benchmarks/
+evals/**/results/
