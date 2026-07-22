@@ -72,6 +72,10 @@ eval README; raw rows committed alongside it.
 - Minimal changes when asked for minimal; flag MVP-era rules as such in
   code comments.
 - Numbers in summaries come verbatim from tool/solver output.
+- **Coding tasks run in subagents on a lower-power model** (trn,
+  2026-07-22): sonnet-class for real implementation, haiku-class for
+  mechanical edits; the main session orchestrates, reviews diffs, and
+  runs tests before committing.
 
 ## 5. Machine-local setup (not in the repo)
 
