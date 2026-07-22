@@ -147,3 +147,14 @@ def test_conclusions_differ_tolerates_solver_noise():
     assert conclusions_differ(old, within) is False
     assert conclusions_differ(old, beyond) is True
     assert conclusions_differ(old, flag) is True
+
+
+def test_revalidate_refuses_entry_without_pinned_inputs(snapshot):
+    # Direct commit_episode callers can produce workflow entries with
+    # method.inputs=None — re-running those with workflow defaults would
+    # silently study something else (trn audit finding).
+    entry = _entry(snapshot)
+    entry["method"]["inputs"] = None
+    entry_id = ledger.commit_entry(entry)
+    with pytest.raises(ValueError, match="no pinned method.inputs"):
+        revalidate_entry(entry_id, runner=lambda name, inputs: "should_not_run")
