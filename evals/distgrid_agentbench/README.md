@@ -59,7 +59,25 @@ stdout.
 
 | date | model | tasks | P@1 | precision | notes |
 |---|---|---|---|---|---|
-| 2026-07-22 | gemma4:26b | 200 | _running_ | _running_ | first baseline, strict scorer |
+| 2026-07-22 | gemma4:26b | 43/200 (paused) | 0.0% | 0.0% | partial first baseline, strict scorer |
+
+Partial-run failure breakdown (43 tasks: general 20, powerflow 20,
+infeasibility 3; raw rows in `baseline_partial_gemma4_26b_20260722.jsonl.txt`):
+
+- **15 wrong/missing tool** — the real capability gap. Dominated by skipped
+  loader/setup steps: `load_distribution_network` missed 13×, `load_load`
+  10×, `load_transmission_network` 4×.
+- **14 right tool, wrong args** — near-misses, partly scorer strictness
+  (e.g. `capacitor` vs `capacitors`); a leniency pass would recover some.
+- **14 response errors** — malformed/unparseable model output; investigate
+  whether prompt or extraction is at fault before blaming the model.
+- Tool-set coverage (all GT tools present, ignoring args and order): only
+  **3/43** — so the zero is mostly genuine, not scorer artifact.
+
+Read: gemma4-class models don't have setup-step discipline over a 108-tool
+catalog. This is the exact behavior Wayne's fixed workflows + verifier
+exist to compensate for, and a concrete argument for codified process
+knowledge (ledger brief §7) over raw planning.
 
 ## Relationship to Wayne
 
