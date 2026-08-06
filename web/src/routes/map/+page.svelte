@@ -1,6 +1,9 @@
 <script lang="ts">
   import { env } from '$env/dynamic/public';
   import MapLibreMap from '$lib/map/MapLibreMap.svelte';
+  import BeneficiaryLoadPanel from '$lib/study/BeneficiaryLoadPanel.svelte';
+  import beneficiaryDemoFixture from '$lib/study/beneficiary-load-demo.json';
+  import { buildBeneficiaryOverlay, type BeneficiaryLoadStudy } from '$lib/study/beneficiary-load';
   import StudyPanel from '$lib/study/StudyPanel.svelte';
   import { runStudy } from '$lib/study/client';
   import { wayneLayerIds } from '@wayne/map';
@@ -48,6 +51,22 @@
   let whatIfBusy = $state(false);
   let whatIfError = $state<string | null>(null);
   let whatIfTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // --- Beneficiary-load transfer demo ---------------------------------
+  // The committed fixture is generated from the RTS-GMLC snapshot by
+  // platform/tools/eval/beneficiary_load_demo.py. Keeping it static makes
+  // this map demo deployable without a Python/pandapower runtime.
+  const beneficiaryDemo = beneficiaryDemoFixture as unknown as BeneficiaryLoadStudy;
+  let beneficiaryStudy = $state<BeneficiaryLoadStudy | null>(null);
+  let beneficiaryRunning = $state(false);
+  let beneficiaryRunKey = $state(0);
+  let selectedBeneficiaryPoiId = $state('');
+  let marginalLoadMw = $state(0);
+  const beneficiaryOverlay = $derived(
+    beneficiaryStudy
+      ? buildBeneficiaryOverlay(beneficiaryStudy, selectedBeneficiaryPoiId, marginalLoadMw)
+      : null
+  );
 
   async function loadLmpOverlay(url: string) {
     const res = await fetch(url);
@@ -159,6 +178,36 @@
     }
   }
 
+  function selectBeneficiaryPoi(busId: string) {
+    const study = beneficiaryStudy;
+    const poi = study?.pois.find((candidate) => candidate.bus_id === busId);
+    if (!poi) return;
+    selectedBeneficiaryPoiId = poi.bus_id;
+    // Start inside the unlocked band so the initial result immediately shows
+    // the no-ADER overload and the managed, still-feasible counterpart.
+    marginalLoadMw = Math.round((poi.base_capacity_mw + 0.65 * poi.unlocked_capacity_mw) * 10) / 10;
+  }
+
+  async function runBeneficiaryDemo() {
+    if (beneficiaryRunning) return;
+    beneficiaryRunning = true;
+    beneficiaryStudy = null;
+    // Make the fixture-backed prototype feel like the study it represents,
+    // while keeping the demo deterministic and available on static deploys.
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    beneficiaryStudy = beneficiaryDemo;
+    beneficiaryRunKey += 1;
+    const firstPoi = beneficiaryDemo.pois[0];
+    if (firstPoi) selectBeneficiaryPoi(firstPoi.bus_id);
+    beneficiaryRunning = false;
+  }
+
+  function closeBeneficiaryDemo() {
+    beneficiaryStudy = null;
+    selectedBeneficiaryPoiId = '';
+    marginalLoadMw = 0;
+  }
+
   function closeStudy() {
     // Aborting the fetch closes the NDJSON stream; the server kills the
     // orchestrator subprocess on cancel, so no orphaned runs pile up.
@@ -189,10 +238,48 @@
     {lmpOverlay}
     {lmpDomain}
     onSelectLmpBus={agentEnabled ? selectLmpBus : undefined}
+    {beneficiaryOverlay}
+    beneficiaryStudyKey={beneficiaryStudy ? String(beneficiaryRunKey) : null}
+    onSelectBeneficiaryPoi={selectBeneficiaryPoi}
   />
+
+  <aside class="demo-launch" class:running={beneficiaryRunning} aria-label="Beneficiary-load demo">
+    <span class="demo-kicker">interactive prototype</span>
+    <h2>Beneficiary-load transfer</h2>
+    <p>
+      Rank target load POIs by contingency headroom unlocked through BA-referenced ADER dispatch.
+    </p>
+    <button type="button" onclick={runBeneficiaryDemo} disabled={beneficiaryRunning}>
+      {#if beneficiaryRunning}
+        <span class="spinner" aria-hidden="true"></span> screening 14,042 pairs…
+      {:else if beneficiaryStudy}
+        Rerun demo study
+      {:else}
+        Run demo study
+      {/if}
+    </button>
+    {#if beneficiaryStudy}
+      <div class="mini-legend">
+        <span><i class="poi-dot"></i> load POI</span>
+        <span><i class="ader-dot"></i> ADER</span>
+        <span><i class="constraint-line"></i> managed constraint</span>
+      </div>
+    {/if}
+  </aside>
 
   {#if studyOpen}
     <StudyPanel events={studyEvents} running={studyRunning} onClose={closeStudy} />
+  {/if}
+
+  {#if beneficiaryStudy}
+    <BeneficiaryLoadPanel
+      study={beneficiaryStudy}
+      selectedPoiId={selectedBeneficiaryPoiId}
+      {marginalLoadMw}
+      onSelectPoi={selectBeneficiaryPoi}
+      onMarginalLoad={(mw) => (marginalLoadMw = mw)}
+      onClose={closeBeneficiaryDemo}
+    />
   {/if}
 
   {#if lmpOverlay && lmpDomain}
@@ -289,6 +376,132 @@
       sans-serif;
     box-shadow: 0 4px 14px rgba(28, 24, 18, 0.1);
     backdrop-filter: blur(4px);
+  }
+
+  .demo-launch {
+    position: absolute;
+    top: 16px;
+    left: 220px;
+    z-index: 11;
+    width: 278px;
+    padding: 11px 13px;
+    border: 1px solid rgba(107, 93, 74, 0.9);
+    border-radius: 8px;
+    background: rgba(250, 246, 236, 0.95);
+    box-shadow: 0 5px 18px rgba(28, 24, 18, 0.12);
+    color: #1c1812;
+    font:
+      0.74rem/1.4 'Inter',
+      system-ui,
+      sans-serif;
+    backdrop-filter: blur(5px);
+  }
+
+  .demo-launch .demo-kicker {
+    color: #287a5c;
+    font-size: 0.59rem;
+    font-weight: 750;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .demo-launch h2 {
+    margin: 2px 0 3px;
+    font-size: 0.92rem;
+    line-height: 1.2;
+  }
+
+  .demo-launch p {
+    margin: 0;
+    color: #6b5d4a;
+    font-size: 0.68rem;
+  }
+
+  .demo-launch button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    margin-top: 9px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 5px;
+    background: #287a5c;
+    color: #faf6ec;
+    cursor: pointer;
+    font:
+      650 0.7rem 'Inter',
+      system-ui,
+      sans-serif;
+  }
+
+  .demo-launch button:hover:not(:disabled) {
+    background: #22674e;
+  }
+
+  .demo-launch button:disabled {
+    cursor: wait;
+    opacity: 0.82;
+  }
+
+  .spinner {
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(250, 246, 236, 0.4);
+    border-top-color: #faf6ec;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .mini-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 10px;
+    margin-top: 8px;
+    color: #6b5d4a;
+    font-size: 0.59rem;
+  }
+
+  .mini-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .mini-legend i {
+    display: inline-block;
+    flex: none;
+  }
+
+  .poi-dot,
+  .ader-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .poi-dot {
+    border: 2px solid #3aa17a;
+    background: #faf6ec;
+  }
+
+  .ader-dot {
+    border: 1px solid #faf6ec;
+    background: #6f8a52;
+  }
+
+  .constraint-line {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    background: #3aa17a;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .panel h2 {
@@ -429,5 +642,14 @@
     font-size: 0.7rem;
     color: #6b5d4a;
     font-style: italic;
+  }
+
+  @media (max-width: 760px) {
+    .demo-launch {
+      top: 154px;
+      left: 16px;
+      width: min(278px, calc(100vw - 32px));
+      box-sizing: border-box;
+    }
   }
 </style>
