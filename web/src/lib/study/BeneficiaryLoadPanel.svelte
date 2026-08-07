@@ -222,7 +222,7 @@
   </section>
 
   <footer>
-    Assumed ADER and target-POI sets on RTS-GMLC · {study.metadata.model} ·
+    Assumed ADER and target-POI sets on {study.metadata.snapshot} · {study.metadata.model} ·
     {study.metadata.emergency_rating_multiplier.toFixed(2)}× emergency ratings ·
     {study.metadata.islanding_outages_excluded} islanding outages excluded. Sensitivity bound, not an
     AC-feasible dispatch.

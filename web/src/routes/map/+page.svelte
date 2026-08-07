@@ -3,6 +3,7 @@
   import MapLibreMap from '$lib/map/MapLibreMap.svelte';
   import BeneficiaryLoadPanel from '$lib/study/BeneficiaryLoadPanel.svelte';
   import beneficiaryDemoFixture from '$lib/study/beneficiary-load-demo.json';
+  import beneficiaryTexas7kFixture from '$lib/study/beneficiary-load-texas7k.json';
   import { buildBeneficiaryOverlay, type BeneficiaryLoadStudy } from '$lib/study/beneficiary-load';
   import StudyPanel from '$lib/study/StudyPanel.svelte';
   import { runStudy } from '$lib/study/client';
@@ -53,12 +54,24 @@
   let whatIfTimer: ReturnType<typeof setTimeout> | null = null;
 
   // --- Beneficiary-load transfer demo ---------------------------------
-  // The committed fixture is generated from the RTS-GMLC snapshot by
-  // platform/tools/eval/beneficiary_load_demo.py. Keeping it static makes
+  // The committed fixtures are generated from the RTS-GMLC and Texas 7k
+  // snapshots by platform/tools/eval/beneficiary_load_demo.py and
+  // beneficiary_load_texas7k.py respectively. Keeping them static makes
   // this map demo deployable without a Python/pandapower runtime.
   const beneficiaryDemo = beneficiaryDemoFixture as unknown as BeneficiaryLoadStudy;
+  const beneficiaryTexas7k = beneficiaryTexas7kFixture as unknown as BeneficiaryLoadStudy;
+  type BeneficiaryCaseId = 'demo' | 'texas7k';
+  const BENEFICIARY_CASES: Record<
+    BeneficiaryCaseId,
+    { label: string; fixture: BeneficiaryLoadStudy }
+  > = {
+    demo: { label: 'RTS-GMLC (demo)', fixture: beneficiaryDemo },
+    texas7k: { label: 'Texas 7k (345 kV screen)', fixture: beneficiaryTexas7k }
+  };
   let beneficiaryStudy = $state<BeneficiaryLoadStudy | null>(null);
+  let beneficiaryCaseId = $state<BeneficiaryCaseId | null>(null);
   let beneficiaryRunning = $state(false);
+  let pendingBeneficiaryCase = $state<BeneficiaryCaseId | null>(null);
   let beneficiaryRunKey = $state(0);
   let selectedBeneficiaryPoiId = $state('');
   let marginalLoadMw = $state(0);
@@ -188,22 +201,27 @@
     marginalLoadMw = Math.round((poi.base_capacity_mw + 0.65 * poi.unlocked_capacity_mw) * 10) / 10;
   }
 
-  async function runBeneficiaryDemo() {
+  async function runBeneficiaryCase(caseId: BeneficiaryCaseId) {
     if (beneficiaryRunning) return;
     beneficiaryRunning = true;
+    pendingBeneficiaryCase = caseId;
     beneficiaryStudy = null;
     // Make the fixture-backed prototype feel like the study it represents,
     // while keeping the demo deterministic and available on static deploys.
     await new Promise((resolve) => setTimeout(resolve, 650));
-    beneficiaryStudy = beneficiaryDemo;
+    const fixture = BENEFICIARY_CASES[caseId].fixture;
+    beneficiaryStudy = fixture;
+    beneficiaryCaseId = caseId;
     beneficiaryRunKey += 1;
-    const firstPoi = beneficiaryDemo.pois[0];
+    const firstPoi = fixture.pois[0];
     if (firstPoi) selectBeneficiaryPoi(firstPoi.bus_id);
     beneficiaryRunning = false;
+    pendingBeneficiaryCase = null;
   }
 
   function closeBeneficiaryDemo() {
     beneficiaryStudy = null;
+    beneficiaryCaseId = null;
     selectedBeneficiaryPoiId = '';
     marginalLoadMw = 0;
   }
@@ -249,15 +267,23 @@
     <p>
       Rank target load POIs by contingency headroom unlocked through BA-referenced ADER dispatch.
     </p>
-    <button type="button" onclick={runBeneficiaryDemo} disabled={beneficiaryRunning}>
-      {#if beneficiaryRunning}
-        <span class="spinner" aria-hidden="true"></span> screening 14,042 pairs…
-      {:else if beneficiaryStudy}
-        Rerun demo study
-      {:else}
-        Run demo study
-      {/if}
-    </button>
+    <div class="case-buttons">
+      {#each Object.entries(BENEFICIARY_CASES) as [id, config] (id)}
+        <button
+          type="button"
+          onclick={() => runBeneficiaryCase(id as BeneficiaryCaseId)}
+          disabled={beneficiaryRunning}
+        >
+          {#if beneficiaryRunning && pendingBeneficiaryCase === id}
+            <span class="spinner" aria-hidden="true"></span> screening…
+          {:else if beneficiaryCaseId === id}
+            Rerun {config.label}
+          {:else}
+            {config.label}
+          {/if}
+        </button>
+      {/each}
+    </div>
     {#if beneficiaryStudy}
       <div class="mini-legend">
         <span><i class="poi-dot"></i> load POI</span>
@@ -417,13 +443,19 @@
     font-size: 0.68rem;
   }
 
+  .demo-launch .case-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 9px;
+  }
+
   .demo-launch button {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 7px;
     width: 100%;
-    margin-top: 9px;
     padding: 7px 10px;
     border: 0;
     border-radius: 5px;
