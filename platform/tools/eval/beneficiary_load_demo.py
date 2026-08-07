@@ -24,6 +24,7 @@ from pandapower.pd2ppc import _pd2ppc
 from pandapower.pypower.makeLODF import makeLODF
 from pandapower.pypower.makePTDF import makePTDF
 
+from gridagent_tools import beneficiary_screen
 from gridagent_tools.backends.pandapower import _build_net
 from gridagent_tools.snapshot import Snapshot
 
@@ -56,28 +57,6 @@ CONSTRAINTS_PER_POI = 4
 
 def _round(value: float, digits: int = 3) -> float:
     return round(float(value), digits)
-
-
-def _directional_transfer_limits(
-    flows: np.ndarray,
-    load_factor: np.ndarray,
-    limits: np.ndarray,
-    valid: np.ndarray,
-) -> np.ndarray:
-    """Return the positive-load limit for every monitored/outage pair."""
-    transfer = np.full(flows.shape, np.inf, dtype=float)
-    positive = load_factor > 1e-9
-    negative = load_factor < -1e-9
-    upper = np.broadcast_to(limits, flows.shape)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        transfer[positive] = ((upper - flows) / load_factor)[positive]
-        transfer[negative] = ((flows + upper) / (-load_factor))[negative]
-    transfer[~valid] = np.inf
-    return transfer
-
-
-def _capacity(transfer_limits: np.ndarray) -> float:
-    return max(0.0, float(np.nanmin(transfer_limits)))
 
 
 def build_fixture(snapshot_path: Path) -> dict[str, Any]:
@@ -121,11 +100,9 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
     # Replace invalid LODF entries only for the arithmetic. Their complete
     # columns are excluded below as connectivity/islanding events.
     safe_lodf = np.where(np.isfinite(lodf), lodf, 0.0)
-    contingency_factors = (
-        ptdf[:, None, :] + safe_lodf[:, :, None] * ptdf[None, :, :]
+    referenced_factors = beneficiary_screen.ba_referenced_factors(
+        beneficiary_screen.otdf_from_ptdf_lodf(ptdf, lodf), alpha
     )
-    ba_component = np.einsum("mcb,b->mc", contingency_factors, alpha)
-    referenced_factors = contingency_factors - ba_component[:, :, None]
 
     base_branch_flow = net.res_line["p_from_mw"].to_numpy(dtype=float)
     base_contingency_flow = (
@@ -141,10 +118,6 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
 
     ader_bus_columns = np.array([bus_column[bus_id] for bus_id in ADER_ACTIONS_MW])
     ader_action = np.array(list(ADER_ACTIONS_MW.values()), dtype=float)
-    ader_flow_change = np.einsum(
-        "mcd,d->mc", referenced_factors[:, :, ader_bus_columns], ader_action
-    )
-    managed_contingency_flow = base_contingency_flow + ader_flow_change
 
     load_by_bus = (
         loads[loads["in_service"].astype(bool)]
@@ -153,36 +126,27 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
         .sum()
     )
 
-    pois: list[dict[str, Any]] = []
-    for bus_id in TARGET_POI_BUS_IDS:
-        # Added load at POI l, supplied by the BA, has g_q,l = -d_q,l.
-        load_factor = -referenced_factors[:, :, bus_column[bus_id]]
-        base_limits = _directional_transfer_limits(
-            base_contingency_flow, load_factor, emergency_limits, valid
-        )
-        managed_limits = _directional_transfer_limits(
-            managed_contingency_flow, load_factor, emergency_limits, valid
-        )
-        base_capacity = _capacity(base_limits)
-        managed_capacity = _capacity(managed_limits)
+    poi_bus_columns = [bus_column[bus_id] for bus_id in TARGET_POI_BUS_IDS]
+    poi_results = beneficiary_screen.screen_beneficiary_loads(
+        referenced_factors,
+        base_contingency_flow,
+        emergency_limits,
+        valid,
+        action_bus_columns=ader_bus_columns,
+        action_mw=ader_action,
+        poi_bus_columns=poi_bus_columns,
+        constraints_per_poi=CONSTRAINTS_PER_POI,
+        poi_sort_keys=TARGET_POI_BUS_IDS,
+    )
 
-        # The smallest managed transfer limits are the constraints the slider
-        # reaches first. Tie-break by the base limit and stable matrix index.
-        candidates = np.flatnonzero(np.isfinite(managed_limits).ravel())
-        candidates = sorted(
-            candidates,
-            key=lambda flat: (
-                managed_limits.ravel()[flat],
-                base_limits.ravel()[flat],
-                int(flat),
-            ),
-        )[:CONSTRAINTS_PER_POI]
+    pois: list[dict[str, Any]] = []
+    for result in poi_results:
+        bus_id = TARGET_POI_BUS_IDS[result.poi_index]
 
         constraint_rows: list[dict[str, Any]] = []
-        for rank, flat in enumerate(candidates, start=1):
-            monitored_index, outage_index = np.unravel_index(flat, managed_limits.shape)
-            monitored_id = branch_ids[monitored_index]
-            outage_id = branch_ids[outage_index]
+        for constraint in result.constraints:
+            monitored_id = branch_ids[constraint.monitored_index]
+            outage_id = branch_ids[constraint.outage_index]
             monitored = branch_by_id.loc[monitored_id]
             outage = branch_by_id.loc[outage_id]
             monitored_from = bus_by_id.loc[str(monitored["from_bus_id"])]
@@ -192,7 +156,7 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
             constraint_rows.append(
                 {
                     "id": f"{monitored_id}|{outage_id}",
-                    "rank": rank,
+                    "rank": constraint.rank,
                     "monitored_branch_id": monitored_id,
                     "outage_branch_id": outage_id,
                     "monitored_coordinates": [
@@ -203,19 +167,13 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                         [_round(outage_from["lon"], 6), _round(outage_from["lat"], 6)],
                         [_round(outage_to["lon"], 6), _round(outage_to["lat"], 6)],
                     ],
-                    "emergency_limit_mw": _round(emergency_limits[monitored_index, 0]),
-                    "base_flow_mw": _round(base_contingency_flow[monitored_index, outage_index]),
-                    "managed_flow_mw": _round(
-                        managed_contingency_flow[monitored_index, outage_index]
-                    ),
-                    "ader_flow_change_mw": _round(ader_flow_change[monitored_index, outage_index]),
-                    "poi_load_factor": _round(load_factor[monitored_index, outage_index], 6),
-                    "base_transfer_limit_mw": _round(
-                        max(0.0, base_limits[monitored_index, outage_index])
-                    ),
-                    "managed_transfer_limit_mw": _round(
-                        max(0.0, managed_limits[monitored_index, outage_index])
-                    ),
+                    "emergency_limit_mw": _round(constraint.limit_mw),
+                    "base_flow_mw": _round(constraint.base_flow_mw),
+                    "managed_flow_mw": _round(constraint.managed_flow_mw),
+                    "ader_flow_change_mw": _round(constraint.ader_flow_change_mw),
+                    "poi_load_factor": _round(constraint.poi_load_factor, 6),
+                    "base_transfer_limit_mw": _round(constraint.base_transfer_limit_mw),
+                    "managed_transfer_limit_mw": _round(constraint.managed_transfer_limit_mw),
                 }
             )
 
@@ -226,16 +184,13 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                 "name": str(bus["name"]),
                 "coordinates": [_round(bus["lon"], 6), _round(bus["lat"], 6)],
                 "existing_load_mw": _round(load_by_bus.get(bus_id, 0.0)),
-                "base_capacity_mw": _round(base_capacity),
-                "managed_capacity_mw": _round(managed_capacity),
-                "unlocked_capacity_mw": _round(managed_capacity - base_capacity),
+                "base_capacity_mw": _round(result.base_capacity_mw),
+                "managed_capacity_mw": _round(result.managed_capacity_mw),
+                "unlocked_capacity_mw": _round(result.unlocked_capacity_mw),
                 "constraints": constraint_rows,
+                "rank": result.rank,
             }
         )
-
-    pois.sort(key=lambda poi: (-poi["unlocked_capacity_mw"], poi["bus_id"]))
-    for rank, poi in enumerate(pois, start=1):
-        poi["rank"] = rank
 
     ader_nodes: list[dict[str, Any]] = []
     for bus_id, dispatch_mw in ADER_ACTIONS_MW.items():
