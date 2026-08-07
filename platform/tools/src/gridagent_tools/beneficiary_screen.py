@@ -82,6 +82,7 @@ __all__ = [
     "screen_poi_potential",
     "RecourseResult",
     "poi_recourse_capacity",
+    "recourse_dispatch_for_contingency",
 ]
 
 # Below this magnitude a load factor is treated as "does not move this
@@ -691,6 +692,94 @@ class RecourseResult:
     contingencies_skipped: int
 
 
+def _solve_contingency_lp(
+    linprog,
+    g: np.ndarray,
+    d: np.ndarray,
+    base_contingency_flow: np.ndarray,
+    limit_broadcast: np.ndarray,
+    valid: np.ndarray,
+    c: int,
+    u: np.ndarray,
+    w: np.ndarray,
+    max_load_mw: float | None,
+) -> tuple[float, tuple[float, ...]]:
+    """Solve the single-contingency recourse LP for one POI.
+
+    ``maximize T`` subject to the clamped no-worsening rows for every
+    valid monitored facility under contingency ``c`` -- the exact LP
+    documented in :func:`poi_recourse_capacity`. This is the ONLY place
+    that LP is assembled; both :func:`poi_recourse_capacity` (looped, with
+    the skip rule) and :func:`recourse_dispatch_for_contingency` (one
+    arbitrary ``c``) call it, so the rows, clamp, and status handling stay
+    identical between the two callers by construction.
+
+    ``g``/``d``/``base_contingency_flow``/``limit_broadcast`` are (M, C) /
+    (M, C, P) / (M, C) / (M, C) arrays already prepared by the caller.
+    Returns ``(t_c_max, x_c)``.
+    """
+    n_p = u.shape[0]
+    valid_m = np.flatnonzero(valid[:, c])
+    n_rows = valid_m.shape[0]
+    n_vars = n_p + 1
+
+    a_ub = np.zeros((2 * n_rows, n_vars))
+    b_ub = np.zeros(2 * n_rows)
+    for i, m in enumerate(valid_m):
+        m = int(m)
+        d_row = d[m, c, :]
+        g_m = g[m, c]
+        f0 = base_contingency_flow[m, c]
+        lim = limit_broadcast[m, c]
+        a_ub[2 * i, :n_p] = d_row
+        a_ub[2 * i, n_p] = g_m
+        # Clamped at 0: a facility already in violation at x=0 (|f0| >
+        # limit) is held to "no worse than base", not "within limit" --
+        # the dispatch must not worsen it or create a new binder, but
+        # is never required to cure a pre-existing violation the load
+        # doesn't create. Without this clamp, a negative RHS here would
+        # demand the impossible and the LP would report infeasible for
+        # a facility the load never even pushes toward.
+        b_ub[2 * i] = max(lim - f0, 0.0)
+        a_ub[2 * i + 1, :n_p] = -d_row
+        a_ub[2 * i + 1, n_p] = -g_m
+        b_ub[2 * i + 1] = max(lim + f0, 0.0)
+
+    bounds = [(-float(w[p]), float(u[p])) for p in range(n_p)]
+    bounds.append((0.0, max_load_mw))
+
+    c_obj = np.zeros(n_vars)
+    c_obj[-1] = -1.0  # maximize T == minimize -T
+
+    result = linprog(c_obj, A_ub=a_ub, b_ub=b_ub, bounds=bounds, method="highs")
+
+    if result.status == 0:
+        t_c_max = float(result.x[n_p])
+        x_c = tuple(float(v) for v in result.x[:n_p])
+    elif result.status == 3:
+        # Unbounded: no valid m under this contingency has a nonzero
+        # load factor, so T has zero coefficient everywhere and any
+        # dispatch (in particular the do-nothing one) is a witness.
+        t_c_max = float("inf")
+        x_c = tuple(0.0 for _ in range(n_p))
+    elif result.status == 2:
+        # Infeasible: unreachable under the RHS-clamped rows above --
+        # (x=0, T=0) always satisfies every row (both clamped RHS
+        # values are >= 0 and the LHS is 0 at x=0, T=0), so this branch
+        # cannot trigger in practice. Retained as a defensive guard in
+        # case of an unexpected solver numerical result; 0.0 is the
+        # screening-conservative stand-in if it ever does.
+        t_c_max = 0.0
+        x_c = tuple(0.0 for _ in range(n_p))
+    else:
+        raise RuntimeError(
+            f"linprog returned unexpected status {result.status} for "
+            f"contingency {c}: {result.message}"
+        )
+
+    return t_c_max, x_c
+
+
 def poi_recourse_capacity(
     referenced_factors: np.ndarray,
     base_contingency_flow: np.ndarray,
@@ -855,64 +944,10 @@ def poi_recourse_capacity(
             contingencies_skipped += n_c - idx
             break
 
-        valid_m = np.flatnonzero(valid[:, c])
-        n_rows = valid_m.shape[0]
-        n_vars = n_p + 1
-
-        a_ub = np.zeros((2 * n_rows, n_vars))
-        b_ub = np.zeros(2 * n_rows)
-        for i, m in enumerate(valid_m):
-            m = int(m)
-            d_row = d[m, c, :]
-            g_m = g[m, c]
-            f0 = base_contingency_flow[m, c]
-            lim = limit_broadcast[m, c]
-            a_ub[2 * i, :n_p] = d_row
-            a_ub[2 * i, n_p] = g_m
-            # Clamped at 0: a facility already in violation at x=0 (|f0| >
-            # limit) is held to "no worse than base", not "within limit" --
-            # the dispatch must not worsen it or create a new binder, but
-            # is never required to cure a pre-existing violation the load
-            # doesn't create. Without this clamp, a negative RHS here would
-            # demand the impossible and the LP would report infeasible for
-            # a facility the load never even pushes toward.
-            b_ub[2 * i] = max(lim - f0, 0.0)
-            a_ub[2 * i + 1, :n_p] = -d_row
-            a_ub[2 * i + 1, n_p] = -g_m
-            b_ub[2 * i + 1] = max(lim + f0, 0.0)
-
-        bounds = [(-float(w[p]), float(u[p])) for p in range(n_p)]
-        bounds.append((0.0, max_load_mw))
-
-        c_obj = np.zeros(n_vars)
-        c_obj[-1] = -1.0  # maximize T == minimize -T
-
-        result = linprog(c_obj, A_ub=a_ub, b_ub=b_ub, bounds=bounds, method="highs")
+        t_c_max, x_c = _solve_contingency_lp(
+            linprog, g, d, base_contingency_flow, limit_broadcast, valid, c, u, w, max_load_mw
+        )
         lp_solves += 1
-
-        if result.status == 0:
-            t_c_max = float(result.x[n_p])
-            x_c = tuple(float(v) for v in result.x[:n_p])
-        elif result.status == 3:
-            # Unbounded: no valid m under this contingency has a nonzero
-            # load factor, so T has zero coefficient everywhere and any
-            # dispatch (in particular the do-nothing one) is a witness.
-            t_c_max = float("inf")
-            x_c = tuple(0.0 for _ in range(n_p))
-        elif result.status == 2:
-            # Infeasible: unreachable under the RHS-clamped rows above --
-            # (x=0, T=0) always satisfies every row (both clamped RHS
-            # values are >= 0 and the LHS is 0 at x=0, T=0), so this branch
-            # cannot trigger in practice. Retained as a defensive guard in
-            # case of an unexpected solver numerical result; 0.0 is the
-            # screening-conservative stand-in if it ever does.
-            t_c_max = 0.0
-            x_c = tuple(0.0 for _ in range(n_p))
-        else:
-            raise RuntimeError(
-                f"linprog returned unexpected status {result.status} for "
-                f"contingency {c}: {result.message}"
-            )
 
         solved_T[c] = t_c_max
         solved_x[c] = x_c
@@ -934,4 +969,94 @@ def poi_recourse_capacity(
         binding_dispatch_mw=binding_dispatch,
         lp_solves=lp_solves,
         contingencies_skipped=contingencies_skipped,
+    )
+
+
+def recourse_dispatch_for_contingency(
+    referenced_factors: np.ndarray,
+    base_contingency_flow: np.ndarray,
+    limit_mw: np.ndarray,
+    valid: np.ndarray,
+    *,
+    ader_bus_columns: np.ndarray,
+    ader_injection_max_mw: np.ndarray,
+    ader_withdrawal_max_mw: np.ndarray,
+    poi_bus_column: int,
+    contingency_index: int,
+    max_load_mw: float | None = None,
+) -> tuple[float, tuple[float, ...]]:
+    """T_c_max and the optimal x_c for one contingency (Tier-2 sub-problem).
+
+    Solves the exact same per-contingency LP as one iteration of
+    :func:`poi_recourse_capacity`'s loop -- both call the shared
+    ``_solve_contingency_lp`` helper, so the clamped no-worsening rows and
+    status handling are identical between the two -- but for an arbitrary
+    caller-supplied ``contingency_index`` rather than only the ones the
+    skip rule happens to visit, and without computing the across-
+    contingency minimum. Useful for a caller (e.g. a map visualization)
+    that wants the concrete "with ADER" dispatch and flows for one
+    specific contingency, not just the POI's overall binding one.
+
+    Returns ``(t_c_max, x_c)`` with the same status conventions as
+    :func:`poi_recourse_capacity`: ``t_c_max = float('inf')`` if this
+    contingency is unbounded (no valid facility under it depends on T at
+    all), and the defensive ``(0.0, all-zeros x_c)`` fallback if the
+    solver ever reports infeasible -- unreachable in practice under the
+    clamped no-worsening rows, see :func:`poi_recourse_capacity`'s
+    docstring for why.
+
+    Requires scipy (``pip install scipy``); imported lazily so the module
+    itself has no hard scipy dependency.
+    """
+    try:
+        from scipy.optimize import linprog
+    except ImportError as exc:
+        raise RuntimeError(
+            "recourse_dispatch_for_contingency requires scipy (pip install scipy)"
+        ) from exc
+
+    referenced_factors = np.asarray(referenced_factors, dtype=np.float64)
+    base_contingency_flow = np.asarray(base_contingency_flow, dtype=np.float64)
+    limit_mw_arr = np.asarray(limit_mw, dtype=np.float64)
+    valid = np.asarray(valid, dtype=bool)
+    ader_bus_columns = np.asarray(ader_bus_columns)
+    u = np.asarray(ader_injection_max_mw, dtype=np.float64)
+    w = np.asarray(ader_withdrawal_max_mw, dtype=np.float64)
+
+    if np.isnan(referenced_factors).any():
+        raise ValueError("referenced_factors contains NaN")
+    if np.isnan(base_contingency_flow).any():
+        raise ValueError("base_contingency_flow contains NaN")
+    if np.isnan(limit_mw_arr).any():
+        raise ValueError("limit_mw contains NaN")
+    if np.any(u < 0):
+        raise ValueError("ader_injection_max_mw must be >= 0 elementwise")
+    if np.any(w < 0):
+        raise ValueError("ader_withdrawal_max_mw must be >= 0 elementwise")
+    if not (
+        u.ndim == 1
+        and w.ndim == 1
+        and ader_bus_columns.ndim == 1
+        and u.shape == w.shape == ader_bus_columns.shape
+    ):
+        raise ValueError(
+            "ader_injection_max_mw, ader_withdrawal_max_mw, and "
+            "ader_bus_columns must be 1-D with matching shape"
+        )
+
+    g = -referenced_factors[:, :, poi_bus_column]  # (M, C)
+    d = referenced_factors[:, :, ader_bus_columns]  # (M, C, P)
+    limit_broadcast = np.broadcast_to(limit_mw_arr, base_contingency_flow.shape)
+
+    return _solve_contingency_lp(
+        linprog,
+        g,
+        d,
+        base_contingency_flow,
+        limit_broadcast,
+        valid,
+        contingency_index,
+        u,
+        w,
+        max_load_mw,
     )

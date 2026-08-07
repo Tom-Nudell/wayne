@@ -72,6 +72,17 @@ in early drafts.
    `screen_beneficiary_loads`, spec §13 `evaluate_dispatch_action`) can
    legitimately report a *negative* effect at some POI — a fixed dispatch
    redistributes flow. That is precisely why it is not the POI score.
+   **This extends to visualization** *(added 2026-08-07 after review)*: any
+   user-facing "with dispatch" flows, headrooms, or capacities must be
+   computed from a dispatch that satisfies the validity rule for the state
+   being displayed — i.e., the per-contingency recourse dispatch
+   (`recourse_dispatch_for_contingency`), never an arbitrary fixed action
+   applied unconditionally. Mixing the two conventions in one view produces
+   contradictory numbers (e.g. "0 MW with ADER" beside "recourse 800 MW"),
+   and a fixed action can render a worsened constraint as if it were an
+   outcome the product endorses. Pre-violated pairs must be labeled as
+   pre-existing violations held no-worse-than-base, not shown as ordinary
+   red bars.
 
 ### The funnel
 

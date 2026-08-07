@@ -23,17 +23,41 @@
   const constraints = $derived(
     selected.constraints.map((constraint) => projectConstraint(constraint, marginalLoadMw))
   );
+  // The recourse capacity (per-contingency LP, Tier 2) is the achievable
+  // "with ADER" figure when the fixture carries it; the legacy fixed-
+  // dispatch managed capacity is the fallback for older fixtures.
+  const withAderCapacityMw = $derived(selected.screen?.recourse_capacity_mw ?? selected.managed_capacity_mw);
+  const withAderUnlockedMw = $derived(Math.max(0, withAderCapacityMw - selected.base_capacity_mw));
   const unlockUsed = $derived(
-    Math.max(0, Math.min(selected.unlocked_capacity_mw, marginalLoadMw - selected.base_capacity_mw))
+    Math.max(0, Math.min(withAderUnlockedMw, marginalLoadMw - selected.base_capacity_mw))
   );
   const unlockUsedPct = $derived(
-    selected.unlocked_capacity_mw > 0 ? (100 * unlockUsed) / selected.unlocked_capacity_mw : 0
+    withAderUnlockedMw > 0 ? (100 * unlockUsed) / withAderUnlockedMw : 0
+  );
+
+  const aderNodeByBusId = $derived(new Map(study.ader_nodes.map((node) => [node.bus_id, node])));
+  const recourseNetDispatchMw = $derived(
+    selected.screen?.recourse_binding_dispatch
+      ? selected.screen.recourse_binding_dispatch.reduce((sum, node) => sum + node.p_mw, 0)
+      : 0
   );
 
   const fmt = (value: number, digits = 0) =>
     value.toLocaleString(undefined, { maximumFractionDigits: digits });
   const signed = (value: number) => `${value >= 0 ? '+' : ''}${fmt(value, 0)}`;
   const barWidth = (value: number) => `${Math.min(Math.max(value, 0), 112)}%`;
+  const withAderLoadingPct = (constraint: (typeof constraints)[number]) =>
+    constraint.recourse_projected_loading_pct ?? constraint.projected_loading_pct;
+  const isWithAderOver = (constraint: (typeof constraints)[number]) => {
+    const pct = withAderLoadingPct(constraint);
+    if (pct <= 100) return false;
+    // A pre-existing violation held no worse than base is not a NEW failure
+    // caused by the dispatch, even though it still reads over 100%.
+    if (constraint.pre_existing_violation && pct <= constraint.counterfactual_loading_pct + 1e-6) {
+      return false;
+    }
+    return true;
+  };
 </script>
 
 <aside class="study-panel" aria-label="Beneficiary-load transfer results">
@@ -134,20 +158,20 @@
 
     <div class="capacity-numbers">
       <span>base <strong>{fmt(selected.base_capacity_mw, 1)} MW</strong></span>
-      <span>with ADER <strong>{fmt(selected.managed_capacity_mw, 1)} MW</strong></span>
+      <span>with ADER <strong>{fmt(withAderCapacityMw, 1)} MW</strong></span>
     </div>
     <div class="capacity-track" aria-hidden="true">
       <div
         class="base-band"
-        style:width={`${(100 * selected.base_capacity_mw) / selected.managed_capacity_mw}%`}
+        style:width={`${(100 * selected.base_capacity_mw) / withAderCapacityMw}%`}
       ></div>
       <div
         class="unlock-band"
-        style:width={`${(100 * selected.unlocked_capacity_mw) / selected.managed_capacity_mw}%`}
+        style:width={`${(100 * withAderUnlockedMw) / withAderCapacityMw}%`}
       ></div>
       <div
         class="load-marker"
-        style:left={`${(100 * marginalLoadMw) / selected.managed_capacity_mw}%`}
+        style:left={`${(100 * marginalLoadMw) / withAderCapacityMw}%`}
       ></div>
     </div>
 
@@ -156,7 +180,7 @@
       <input
         type="range"
         min="0"
-        max={selected.managed_capacity_mw}
+        max={withAderCapacityMw}
         step="1"
         value={marginalLoadMw}
         oninput={(event) => onMarginalLoad(Number(event.currentTarget.value))}
@@ -183,6 +207,9 @@
           <span>during outage {constraint.outage_branch_id}</span>
           <em>+{fmt(constraint.transfer_gain_mw, 1)} MW headroom</em>
         </div>
+        {#if constraint.pre_existing_violation}
+          <p class="pre-existing-badge">pre-existing violation</p>
+        {/if}
         <div class="comparison-row">
           <span>no ADER</span>
           <div class="bar">
@@ -196,10 +223,10 @@
         <div class="comparison-row">
           <span>with ADER</span>
           <div class="bar">
-            <i class="managed" style:width={barWidth(constraint.projected_loading_pct)}></i>
+            <i class="managed" style:width={barWidth(withAderLoadingPct(constraint))}></i>
           </div>
-          <strong class:over={constraint.projected_loading_pct > 100}
-            >{fmt(constraint.projected_loading_pct, 1)}%</strong
+          <strong class:over={isWithAderOver(constraint)}
+            >{fmt(withAderLoadingPct(constraint), 1)}%</strong
           >
         </div>
       </article>
@@ -207,18 +234,37 @@
   </section>
 
   <section class="dispatch">
-    <h3>Assumed ADER action</h3>
-    <div class="dispatch-grid">
-      {#each study.ader_nodes as node}
-        <span class:withdrawal={node.dispatch_mw < 0}
-          >{node.name} {signed(node.dispatch_mw)} MW</span
-        >
-      {/each}
-    </div>
-    <p>
-      Net ADER {signed(study.metadata.ader_net_dispatch_mw)} MW; BA reference
-      {signed(study.metadata.ba_reference_dispatch_mw)} MW. Added POI load is a separate BA-to-POI transfer.
-    </p>
+    {#if selected.screen?.recourse_binding_dispatch}
+      <h3>Recourse dispatch — binding contingency</h3>
+      <div class="dispatch-grid">
+        {#each selected.screen.recourse_binding_dispatch as node}
+          <span class:withdrawal={node.p_mw < 0}
+            >{aderNodeByBusId.get(node.bus_id)?.name ?? node.bus_id} {signed(node.p_mw)} MW</span
+          >
+        {/each}
+      </div>
+      <p class="section-note">
+        One dispatch per contingency; shown for the binding contingency ({selected.screen
+          .recourse_binding_contingency}). The fixed example action is retired from this view.
+      </p>
+      <p>
+        Net ADER {signed(recourseNetDispatchMw)} MW; BA reference
+        {signed(-recourseNetDispatchMw)} MW. Added POI load is a separate BA-to-POI transfer.
+      </p>
+    {:else}
+      <h3>Assumed ADER action</h3>
+      <div class="dispatch-grid">
+        {#each study.ader_nodes as node}
+          <span class:withdrawal={node.dispatch_mw < 0}
+            >{node.name} {signed(node.dispatch_mw)} MW</span
+          >
+        {/each}
+      </div>
+      <p>
+        Net ADER {signed(study.metadata.ader_net_dispatch_mw)} MW; BA reference
+        {signed(study.metadata.ba_reference_dispatch_mw)} MW. Added POI load is a separate BA-to-POI transfer.
+      </p>
+    {/if}
   </section>
 
   <footer>
@@ -593,6 +639,19 @@
     font-size: 0.61rem;
     font-style: normal;
     white-space: nowrap;
+  }
+
+  .pre-existing-badge {
+    display: inline-block;
+    margin-bottom: 6px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(192, 57, 43, 0.12);
+    color: #c0392b;
+    font-size: 0.58rem;
+    font-weight: 650;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
 
   .comparison-row {

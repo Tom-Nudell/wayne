@@ -214,6 +214,15 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
     pois: list[dict[str, Any]] = []
     for result in poi_results:
         bus_id = TARGET_POI_BUS_IDS[result.poi_index]
+        poi_bus_column = poi_bus_columns[result.poi_index]
+
+        # Per-contingency recourse dispatch x_c for this POI's displayed
+        # rows. Cached because two rows can share a contingency; x_c is
+        # per-(POI, contingency) since the LP depends on the POI's g. The
+        # legacy row's outage_index already indexes the same contingency
+        # columns as the tier arrays (append_intact_contingency only
+        # appends a column after them), so it is used directly here.
+        dispatch_cache: dict[int, np.ndarray] = {}
 
         constraint_rows: list[dict[str, Any]] = []
         for constraint in result.constraints:
@@ -225,6 +234,42 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
             monitored_to = bus_by_id.loc[str(monitored["to_bus_id"])]
             outage_from = bus_by_id.loc[str(outage["from_bus_id"])]
             outage_to = bus_by_id.loc[str(outage["to_bus_id"])]
+
+            contingency_index = constraint.outage_index
+            if contingency_index not in dispatch_cache:
+                _, x_c = beneficiary_screen.recourse_dispatch_for_contingency(
+                    tier_referenced_factors,
+                    tier_base_contingency_flow,
+                    emergency_limits,
+                    tier_valid,
+                    ader_bus_columns=ader_bus_columns,
+                    ader_injection_max_mw=ader_injection_max_mw,
+                    ader_withdrawal_max_mw=ader_withdrawal_max_mw,
+                    poi_bus_column=poi_bus_column,
+                    contingency_index=contingency_index,
+                )
+                dispatch_cache[contingency_index] = np.asarray(x_c, dtype=float)
+            x_c = dispatch_cache[contingency_index]
+            d_row = tier_referenced_factors[constraint.monitored_index, contingency_index, ader_bus_columns]
+            recourse_flow_mw = constraint.base_flow_mw + float(d_row @ x_c)
+            pre_existing_violation = abs(constraint.base_flow_mw) > constraint.limit_mw
+
+            if pre_existing_violation:
+                assert (
+                    np.sign(constraint.base_flow_mw) * (recourse_flow_mw - constraint.base_flow_mw)
+                    <= 1e-6
+                ), (
+                    f"recourse dispatch worsened a pre-violated pair for POI {bus_id}: "
+                    f"{monitored_id}|{outage_id} base={constraint.base_flow_mw} "
+                    f"recourse={recourse_flow_mw}"
+                )
+            else:
+                assert abs(recourse_flow_mw) <= constraint.limit_mw + 1e-6, (
+                    f"recourse dispatch created a new violation at T=0 for POI {bus_id}: "
+                    f"{monitored_id}|{outage_id} recourse={recourse_flow_mw} "
+                    f"limit={constraint.limit_mw}"
+                )
+
             constraint_rows.append(
                 {
                     "id": f"{monitored_id}|{outage_id}",
@@ -246,6 +291,8 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                     "poi_load_factor": _round(constraint.poi_load_factor, 6),
                     "base_transfer_limit_mw": _round(constraint.base_transfer_limit_mw),
                     "managed_transfer_limit_mw": _round(constraint.managed_transfer_limit_mw),
+                    "recourse_flow_mw": _round(recourse_flow_mw),
+                    "pre_existing_violation": bool(pre_existing_violation),
                 }
             )
 
@@ -256,6 +303,16 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
             if not np.isfinite(potential.next_capacity_mw)
             else _round(potential.next_capacity_mw)
         )
+        if recourse.binding_contingency_index is None:
+            recourse_binding_contingency = None
+            recourse_binding_dispatch = None
+        else:
+            recourse_binding_contingency = _contingency_branch_id(recourse.binding_contingency_index)
+            recourse_binding_dispatch = [
+                {"bus_id": ader_bus_id, "p_mw": _round(p_mw)}
+                for ader_bus_id, p_mw in zip(ADER_ACTIONS_MW, recourse.binding_dispatch_mw)
+            ]
+
         screen = {
             "rank": potential.rank,
             "headroom_mw": _round(potential.headroom_mw),
@@ -270,6 +327,8 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                 {"bus_id": ader_bus_id, "relief_mw": _round(relief_mw)}
                 for ader_bus_id, relief_mw in zip(ADER_ACTIONS_MW, potential.ader_relief_mw)
             ],
+            "recourse_binding_contingency": recourse_binding_contingency,
+            "recourse_binding_dispatch": recourse_binding_dispatch,
         }
 
         bus = bus_by_id.loc[bus_id]

@@ -15,6 +15,7 @@ import pytest
 from gridagent_tools.beneficiary_screen import (
     append_intact_contingency,
     poi_recourse_capacity,
+    recourse_dispatch_for_contingency,
     screen_beneficiary_loads,
     screen_poi_potential,
 )
@@ -584,6 +585,119 @@ def test_dispatch_may_not_worsen_a_pre_existing_violation() -> None:
     assert recourse.capacity_mw < 100.0  # proves the no-worsening cap binds
     assert recourse.binding_dispatch_mw is not None
     assert recourse.binding_dispatch_mw[0] == pytest.approx(0.0, abs=1e-6)
+
+
+def test_recourse_dispatch_for_contingency_matches_full_solve() -> None:
+    """recourse_dispatch_for_contingency reproduces poi_recourse_capacity's
+    own per-contingency solve exactly -- both call the shared
+    _solve_contingency_lp helper -- for the binding contingency, and also
+    exposes a non-binding one on request.
+
+    Reuses the killer recourse case (two contingencies, opposite-sign
+    relief at the same ADER node): recourse capacity is 70.0, achieved by
+    both c=0 (x=+20) and c=1 (x=-20) independently (see
+    test_recourse_beats_any_single_fixed_dispatch for the arithmetic).
+    """
+    pytest.importorskip("scipy")
+
+    referenced_factors, base_contingency_flow, limit_mw, valid = _recourse_two_contingency_case()
+    ader_bus_columns = np.array([0])
+    u = np.array([20.0])
+    w = np.array([20.0])
+
+    full = poi_recourse_capacity(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_column=1,
+    )
+    assert full.binding_contingency_index is not None
+    assert full.binding_dispatch_mw is not None
+
+    t_binding, x_binding = recourse_dispatch_for_contingency(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_column=1,
+        contingency_index=full.binding_contingency_index,
+    )
+    # Same LP, same contingency -> must match the full solve's own value
+    # for the binding contingency (capacity_mw IS that contingency's
+    # solved T_c_max, since it's the argmin by construction) and dispatch.
+    assert t_binding == pytest.approx(full.capacity_mw, abs=1e-6)
+    assert x_binding == pytest.approx(full.binding_dispatch_mw, abs=1e-6)
+
+    # The other contingency (there are exactly two, indices 0 and 1): its
+    # own T_c_max must be >= the overall (min-over-contingencies) capacity.
+    other_c = 1 - full.binding_contingency_index
+    t_other, _x_other = recourse_dispatch_for_contingency(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_column=1,
+        contingency_index=other_c,
+    )
+    assert t_other >= full.capacity_mw - 1e-6
+
+
+def test_recourse_dispatch_respects_no_worsening() -> None:
+    """The dispatch returned for an arbitrary contingency must never push
+    an already-violated facility further past its limit.
+
+    Reuses the no-worsening-cap case: row A (m=0) wants +x, but the
+    identical +x would push already-violated row B (m=1, f0=-80 < -limit
+    = -50) further negative. The hand-derived optimal dispatch is x=0
+    exactly (see test_dispatch_may_not_worsen_a_pre_existing_violation),
+    which leaves row B's flow exactly at its base value -- the boundary of
+    "no worse than base".
+    """
+    pytest.importorskip("scipy")
+
+    referenced_factors = np.array(
+        [
+            [[-1.0, -1.0]],  # m=0 (row A): d_ader=-1, d_poi=-1 -> g=1
+            [[-1.0, 0.0]],  # m=1 (row B): d_ader=-1, d_poi=0  -> g=0
+        ]
+    )  # (M=2, C=1, B=2)
+    base_contingency_flow = np.array([[20.0], [-80.0]])
+    limit_mw = np.array([[100.0], [50.0]])
+    valid = np.array([[True], [True]])
+    ader_bus_columns = np.array([0])
+    u = np.array([20.0])
+    w = np.array([20.0])
+
+    t_c_max, x_c = recourse_dispatch_for_contingency(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_column=1,
+        contingency_index=0,
+    )
+    assert t_c_max == pytest.approx(80.0, abs=1e-6)
+
+    f0_row_b = float(base_contingency_flow[1, 0])
+    d_row_b = referenced_factors[1, 0, ader_bus_columns]
+    flow_row_b_with_dispatch = f0_row_b + float(np.dot(d_row_b, x_c))
+    # Row B is violated on the NEGATIVE side (f0=-80 < -limit=-50): "no
+    # worse than base" means the dispatched flow must not go MORE
+    # negative than the base flow.
+    assert flow_row_b_with_dispatch >= f0_row_b - 1e-9
 
 
 def _six_contingency_case():

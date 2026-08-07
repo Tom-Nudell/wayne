@@ -151,7 +151,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.002258,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2485.99,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111209_1",
@@ -184,7 +186,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.002848,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2530.353,
+          "pre_existing_violation": true
         },
         {
           "id": "250217_250357_1|250223_250357_1",
@@ -217,7 +221,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -250,7 +256,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.252949,
           "base_transfer_limit_mw": 509.718,
-          "managed_transfer_limit_mw": 740.59
+          "managed_transfer_limit_mw": 740.59,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 1,
@@ -311,6 +319,41 @@
             "bus_id": "110944",
             "relief_mw": 0.64
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -357,7 +400,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.030444,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2530.353,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111212_1",
@@ -390,7 +435,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.029854,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2485.99,
+          "pre_existing_violation": true
         },
         {
           "id": "250217_250357_1|250223_250357_1",
@@ -423,7 +470,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -456,7 +505,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.265794,
           "base_transfer_limit_mw": 485.085,
-          "managed_transfer_limit_mw": 704.799
+          "managed_transfer_limit_mw": 704.799,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 2,
@@ -517,6 +568,41 @@
             "bus_id": "110944",
             "relief_mw": 0.581
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -563,7 +649,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111209_1",
@@ -596,7 +684,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.039559,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2530.353,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111212_1",
@@ -629,7 +719,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.03897,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2485.99,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -662,7 +754,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.255955,
           "base_transfer_limit_mw": 503.732,
-          "managed_transfer_limit_mw": 731.893
+          "managed_transfer_limit_mw": 731.893,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 3,
@@ -723,6 +817,41 @@
             "bus_id": "110944",
             "relief_mw": 2.491
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -769,7 +898,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111209_1",
@@ -802,7 +933,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.107231,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2529.191,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111212_1",
@@ -835,7 +968,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.106642,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2484.711,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -868,7 +1003,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.249572,
           "base_transfer_limit_mw": 516.615,
-          "managed_transfer_limit_mw": 750.611
+          "managed_transfer_limit_mw": 750.611,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 4,
@@ -929,6 +1066,41 @@
             "bus_id": "110944",
             "relief_mw": 2.491
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -975,7 +1147,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.012744,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2530.353,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111212_1",
@@ -1008,7 +1182,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.012155,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2485.99,
+          "pre_existing_violation": true
         },
         {
           "id": "250217_250357_1|250223_250357_1",
@@ -1041,7 +1217,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -1074,7 +1252,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.237328,
           "base_transfer_limit_mw": 543.268,
-          "managed_transfer_limit_mw": 789.336
+          "managed_transfer_limit_mw": 789.336,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 5,
@@ -1135,6 +1315,41 @@
             "bus_id": "110944",
             "relief_mw": 0.581
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -1181,7 +1396,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -1214,7 +1431,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.212465,
           "base_transfer_limit_mw": 606.842,
-          "managed_transfer_limit_mw": 881.705
+          "managed_transfer_limit_mw": 881.705,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         },
         {
           "id": "230273_230288_1|230206_230238_1",
@@ -1247,7 +1466,9 @@
           "ader_flow_change_mw": -60.107,
           "poi_load_factor": 0.2188,
           "base_transfer_limit_mw": 916.281,
-          "managed_transfer_limit_mw": 1190.992
+          "managed_transfer_limit_mw": 1190.992,
+          "recourse_flow_mw": 1108.206,
+          "pre_existing_violation": false
         },
         {
           "id": "230273_230288_1|230236_230238_1",
@@ -1280,7 +1501,9 @@
           "ader_flow_change_mw": -60.107,
           "poi_load_factor": 0.2188,
           "base_transfer_limit_mw": 960.732,
-          "managed_transfer_limit_mw": 1235.443
+          "managed_transfer_limit_mw": 1235.443,
+          "recourse_flow_mw": 1098.48,
+          "pre_existing_violation": false
         }
       ],
       "rank": 6,
@@ -1341,6 +1564,41 @@
             "bus_id": "110944",
             "relief_mw": 2.491
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -1387,7 +1645,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -1420,7 +1680,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.194157,
           "base_transfer_limit_mw": 664.064,
-          "managed_transfer_limit_mw": 964.846
+          "managed_transfer_limit_mw": 964.846,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         },
         {
           "id": "230273_230288_1|230206_230238_1",
@@ -1453,7 +1715,9 @@
           "ader_flow_change_mw": -60.107,
           "poi_load_factor": 0.201136,
           "base_transfer_limit_mw": 996.749,
-          "managed_transfer_limit_mw": 1295.585
+          "managed_transfer_limit_mw": 1295.585,
+          "recourse_flow_mw": 1108.206,
+          "pre_existing_violation": false
         },
         {
           "id": "230273_230288_1|230236_230238_1",
@@ -1486,7 +1750,9 @@
           "ader_flow_change_mw": -60.107,
           "poi_load_factor": 0.201136,
           "base_transfer_limit_mw": 1045.104,
-          "managed_transfer_limit_mw": 1343.94
+          "managed_transfer_limit_mw": 1343.94,
+          "recourse_flow_mw": 1098.48,
+          "pre_existing_violation": false
         }
       ],
       "rank": 7,
@@ -1547,6 +1813,41 @@
             "bus_id": "110944",
             "relief_mw": 2.491
           }
+        ],
+        "recourse_binding_contingency": "250223_250357_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": 100.0
+          }
         ]
       }
     },
@@ -1593,7 +1894,9 @@
           "ader_flow_change_mw": 6.228,
           "poi_load_factor": -0.024913,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": -1875.693,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111209_1",
@@ -1626,7 +1929,9 @@
           "ader_flow_change_mw": -25.398,
           "poi_load_factor": 0.204857,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2529.191,
+          "pre_existing_violation": true
         },
         {
           "id": "111207_111337_1|T_111207_111212_1",
@@ -1659,7 +1964,9 @@
           "ader_flow_change_mw": -25.251,
           "poi_load_factor": 0.204267,
           "base_transfer_limit_mw": 0.0,
-          "managed_transfer_limit_mw": 0.0
+          "managed_transfer_limit_mw": 0.0,
+          "recourse_flow_mw": 2484.711,
+          "pre_existing_violation": true
         },
         {
           "id": "230273_230288_1|230068_230263_1",
@@ -1692,7 +1999,9 @@
           "ader_flow_change_mw": -58.399,
           "poi_load_factor": 0.234597,
           "base_transfer_limit_mw": 549.592,
-          "managed_transfer_limit_mw": 798.525
+          "managed_transfer_limit_mw": 798.525,
+          "recourse_flow_mw": 1185.193,
+          "pre_existing_violation": false
         }
       ],
       "rank": 8,
@@ -1752,6 +2061,41 @@
           {
             "bus_id": "110944",
             "relief_mw": 2.491
+          }
+        ],
+        "recourse_binding_contingency": "T_111207_111212_1",
+        "recourse_binding_dispatch": [
+          {
+            "bus_id": "111078",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110449",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110127",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110484",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110404",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110916",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110340",
+            "p_mw": 100.0
+          },
+          {
+            "bus_id": "110944",
+            "p_mw": -100.0
           }
         ]
       }
