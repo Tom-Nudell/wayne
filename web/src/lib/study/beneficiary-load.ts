@@ -16,6 +16,33 @@ export interface BeneficiaryConstraint {
   managed_transfer_limit_mw: number;
 }
 
+export interface PoiScreenBinding {
+  monitored_branch_id: string;
+  outage_branch_id: string;
+  transfer_limit_mw: number;
+  flow_mw: number;
+  limit_mw: number;
+  load_factor: number;
+}
+
+export interface PoiScreenAderRelief {
+  bus_id: string;
+  relief_mw: number;
+}
+
+export interface PoiScreen {
+  rank: number;
+  headroom_mw: number;
+  next_capacity_mw: number | null;
+  potential_capacity_mw: number;
+  potential_unlock_mw: number;
+  recourse_capacity_mw: number;
+  binding: PoiScreenBinding;
+  potential_binding: PoiScreenBinding;
+  co_binding_count: number;
+  ader_relief_mw: PoiScreenAderRelief[];
+}
+
 export interface BeneficiaryPoi {
   bus_id: string;
   name: string;
@@ -26,6 +53,7 @@ export interface BeneficiaryPoi {
   unlocked_capacity_mw: number;
   rank: number;
   constraints: BeneficiaryConstraint[];
+  screen?: PoiScreen;
 }
 
 export interface AderNode {
@@ -48,6 +76,10 @@ export interface BeneficiaryLoadStudy {
     screened_constraint_pairs: number;
     ader_net_dispatch_mw: number;
     ba_reference_dispatch_mw: number;
+    screen_method?: string;
+    screen_ader_bounds_mw?: number;
+    screen_includes_intact?: boolean;
+    screen_note?: string;
   };
   ader_nodes: AderNode[];
   pois: BeneficiaryPoi[];

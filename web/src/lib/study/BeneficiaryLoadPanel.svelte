@@ -17,6 +17,9 @@
   const selected = $derived(
     study.pois.find((poi) => poi.bus_id === selectedPoiId) ?? study.pois[0]!
   );
+  const rankedPois = $derived(
+    [...study.pois].sort((a, b) => (a.screen?.rank ?? a.rank) - (b.screen?.rank ?? b.rank))
+  );
   const constraints = $derived(
     selected.constraints.map((constraint) => projectConstraint(constraint, marginalLoadMw))
   );
@@ -60,15 +63,25 @@
   <section class="ranking" aria-label="Beneficiary POI ranking">
     <h3>Beneficiaries</h3>
     <div class="poi-list">
-      {#each study.pois as poi}
+      {#each rankedPois as poi}
         <button
           type="button"
           class:active={poi.bus_id === selected.bus_id}
           onclick={() => onSelectPoi(poi.bus_id)}
         >
-          <span class="rank">{poi.rank}</span>
+          <span class="rank">{poi.screen?.rank ?? poi.rank}</span>
           <span class="poi-name">{poi.name}<small>bus {poi.bus_id}</small></span>
-          <strong>+{fmt(poi.unlocked_capacity_mw, 1)} MW</strong>
+          {#if poi.screen}
+            <strong
+              >+{fmt(poi.screen.potential_unlock_mw, 1)} MW
+              <small>potential unlock (certified DC bound)</small>
+              <small class="legacy-line"
+                >example dispatch: +{fmt(poi.unlocked_capacity_mw, 1)} MW</small
+              ></strong
+            >
+          {:else}
+            <strong>+{fmt(poi.unlocked_capacity_mw, 1)} MW</strong>
+          {/if}
         </button>
       {/each}
     </div>
@@ -86,6 +99,38 @@
         <strong>+{fmt(selected.unlocked_capacity_mw, 1)}</strong><span>MW unlocked</span>
       </div>
     </div>
+
+    {#if selected.screen}
+      <div class="tier-row">
+        <div class="tier-stat">
+          <span>headroom</span>
+          <strong>{fmt(selected.screen.headroom_mw, 1)} MW</strong>
+        </div>
+        <div class="tier-stat">
+          <span>next capacity</span>
+          {#if selected.screen.next_capacity_mw !== null && Math.abs(selected.screen.next_capacity_mw - selected.screen.headroom_mw) < 0.1}
+            <strong>co-bound</strong>
+            <small class="tier-hint">co-bound with mirror facility</small>
+          {:else if selected.screen.next_capacity_mw !== null}
+            <strong>{fmt(selected.screen.next_capacity_mw, 1)} MW</strong>
+          {:else}
+            <strong>unconstrained</strong>
+          {/if}
+        </div>
+        <div class="tier-stat">
+          <span>potential (bound)</span>
+          <strong>{fmt(selected.screen.potential_capacity_mw, 1)} MW</strong>
+        </div>
+        <div class="tier-stat">
+          <span>recourse (exact DC)</span>
+          <strong>{fmt(selected.screen.recourse_capacity_mw, 1)} MW</strong>
+        </div>
+      </div>
+      <p class="tier-caption">
+        Bound = no dispatch can beat this. Recourse = achievable in DC, one ADER dispatch per
+        contingency.
+      </p>
+    {/if}
 
     <div class="capacity-numbers">
       <span>base <strong>{fmt(selected.base_capacity_mw, 1)} MW</strong></span>
@@ -353,6 +398,24 @@
     font-size: 0.68rem;
   }
 
+  .poi-list button > strong small {
+    display: block;
+    margin-top: 1px;
+    color: #287a5c;
+    font-size: 0.58rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .poi-list button > strong small.legacy-line {
+    color: #6b5d4a;
+    font-size: 0.6rem;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
   .selected-heading,
   .capacity-numbers,
   .constraint-title {
@@ -394,6 +457,47 @@
 
   .capacity-numbers strong {
     color: #1c1812;
+  }
+
+  .tier-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px;
+    border: 1px solid rgba(28, 24, 18, 0.1);
+    border-radius: 6px;
+    background: rgba(58, 161, 122, 0.06);
+  }
+
+  .tier-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .tier-stat span {
+    color: #6b5d4a;
+    font-size: 0.58rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .tier-stat strong {
+    color: #287a5c;
+    font-size: 0.78rem;
+  }
+
+  .tier-hint {
+    color: #8b5a2b;
+    font-size: 0.58rem;
+    font-style: italic;
+  }
+
+  .tier-caption {
+    margin-top: 6px;
+    color: #6b5d4a;
+    font-size: 0.62rem;
   }
 
   .capacity-track {

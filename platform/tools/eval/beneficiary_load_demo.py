@@ -139,6 +139,78 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
         poi_sort_keys=TARGET_POI_BUS_IDS,
     )
 
+    # --- Tier-screen section (additive; does not alter the fixed-dispatch
+    # computation above). See beneficiary_screen module docstring's "Tiered
+    # screening funnel" for semantics.
+    d_base = ptdf - (ptdf @ alpha)[:, None]
+    (
+        tier_referenced_factors,
+        tier_base_contingency_flow,
+        tier_valid,
+        intact_index,
+    ) = beneficiary_screen.append_intact_contingency(
+        referenced_factors, base_contingency_flow, valid, d_base, base_branch_flow
+    )
+
+    ader_withdrawal_max_mw = np.array(
+        [-ADER_LIMITS_MW[bus_id][0] for bus_id in ADER_ACTIONS_MW], dtype=float
+    )
+    ader_injection_max_mw = np.array(
+        [ADER_LIMITS_MW[bus_id][1] for bus_id in ADER_ACTIONS_MW], dtype=float
+    )
+
+    poi_potentials = beneficiary_screen.screen_poi_potential(
+        tier_referenced_factors,
+        tier_base_contingency_flow,
+        emergency_limits,
+        tier_valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=ader_injection_max_mw,
+        ader_withdrawal_max_mw=ader_withdrawal_max_mw,
+        poi_bus_columns=poi_bus_columns,
+        poi_sort_keys=TARGET_POI_BUS_IDS,
+    )
+    poi_potential_by_index = {result.poi_index: result for result in poi_potentials}
+
+    recourse_by_index: dict[int, beneficiary_screen.RecourseResult] = {}
+    for poi_index, bus_column in enumerate(poi_bus_columns):
+        recourse_by_index[poi_index] = beneficiary_screen.poi_recourse_capacity(
+            tier_referenced_factors,
+            tier_base_contingency_flow,
+            emergency_limits,
+            tier_valid,
+            ader_bus_columns=ader_bus_columns,
+            ader_injection_max_mw=ader_injection_max_mw,
+            ader_withdrawal_max_mw=ader_withdrawal_max_mw,
+            poi_bus_column=bus_column,
+        )
+
+    for poi_index in range(len(poi_bus_columns)):
+        potential = poi_potential_by_index[poi_index]
+        recourse = recourse_by_index[poi_index]
+        assert potential.headroom_mw - 1e-6 <= recourse.capacity_mw <= potential.potential_capacity_mw + 1e-6, (
+            f"sandwich violated for POI index {poi_index}: "
+            f"headroom={potential.headroom_mw} recourse={recourse.capacity_mw} "
+            f"potential={potential.potential_capacity_mw}"
+        )
+
+    def _contingency_branch_id(contingency_index: int) -> str:
+        if contingency_index == intact_index:
+            return "INTACT"
+        return str(branch_ids[contingency_index])
+
+    def _screened_constraint_dict(
+        constraint: beneficiary_screen.ScreenedConstraint,
+    ) -> dict[str, Any]:
+        return {
+            "monitored_branch_id": str(branch_ids[constraint.monitored_index]),
+            "outage_branch_id": _contingency_branch_id(constraint.contingency_index),
+            "transfer_limit_mw": _round(constraint.transfer_limit_mw),
+            "flow_mw": _round(constraint.flow_mw),
+            "limit_mw": _round(constraint.limit_mw),
+            "load_factor": _round(constraint.load_factor, 6),
+        }
+
     pois: list[dict[str, Any]] = []
     for result in poi_results:
         bus_id = TARGET_POI_BUS_IDS[result.poi_index]
@@ -177,6 +249,29 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                 }
             )
 
+        potential = poi_potential_by_index[result.poi_index]
+        recourse = recourse_by_index[result.poi_index]
+        next_capacity_mw = (
+            None
+            if not np.isfinite(potential.next_capacity_mw)
+            else _round(potential.next_capacity_mw)
+        )
+        screen = {
+            "rank": potential.rank,
+            "headroom_mw": _round(potential.headroom_mw),
+            "next_capacity_mw": next_capacity_mw,
+            "potential_capacity_mw": _round(potential.potential_capacity_mw),
+            "potential_unlock_mw": _round(potential.potential_unlock_mw),
+            "recourse_capacity_mw": _round(recourse.capacity_mw),
+            "binding": _screened_constraint_dict(potential.binding),
+            "potential_binding": _screened_constraint_dict(potential.potential_binding),
+            "co_binding_count": len(potential.co_binding),
+            "ader_relief_mw": [
+                {"bus_id": ader_bus_id, "relief_mw": _round(relief_mw)}
+                for ader_bus_id, relief_mw in zip(ADER_ACTIONS_MW, potential.ader_relief_mw)
+            ],
+        }
+
         bus = bus_by_id.loc[bus_id]
         pois.append(
             {
@@ -189,6 +284,7 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
                 "unlocked_capacity_mw": _round(result.unlocked_capacity_mw),
                 "constraints": constraint_rows,
                 "rank": result.rank,
+                "screen": screen,
             }
         )
 
@@ -218,6 +314,14 @@ def build_fixture(snapshot_path: Path) -> dict[str, Any]:
             "screened_constraint_pairs": int(valid.sum()),
             "ader_net_dispatch_mw": _round(ader_action.sum()),
             "ba_reference_dispatch_mw": _round(-ader_action.sum()),
+            "screen_method": "poi_potential_v1",
+            "screen_ader_bounds_mw": float(ader_injection_max_mw[0]),
+            "screen_includes_intact": True,
+            "screen_note": (
+                "potential_capacity_mw is a certified optimistic bound (Tier 1); "
+                "recourse_capacity_mw is the exact DC recourse value (Tier 2); "
+                "headroom <= recourse <= potential holds for every POI."
+            ),
         },
         "ader_nodes": ader_nodes,
         "pois": pois,
