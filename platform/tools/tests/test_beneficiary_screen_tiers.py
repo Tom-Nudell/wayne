@@ -129,6 +129,81 @@ def test_envelope_bound_matches_hand_computed_arithmetic() -> None:
     assert r.potential_unlock_mw == pytest.approx(1.6 / 0.6)
 
 
+def test_pre_violated_loading_direction_pair_bounds_match_lp() -> None:
+    """A pair already violated in the POI's own LOADING direction must not
+    collapse the Tier-1 bound below Tier-2's achievable value (the second
+    real-data regression, from a 6,717-bus Texas synthetic case).
+
+    Row V (m=0, violated): g=1, d_ader=-1, f0=120, limit=100 -> raw t0 =
+        (100-120)/1 = -20.0 (already past the limit in the direction
+        increasing T also pushes toward). Old (buggy) bound was
+        t0 + r/|g| = -20 + 20 = 0.0; the fixed bound clamps the headroom
+        term first: max(t0,0) + r/|g| = 0 + 20 = 20.0.
+    Row N (m=1, normal): g=1, d_ader=-1, f0=30, limit=100 -> raw t0 =
+        (100-30)/1 = 70.0; bound (same either way since t0>0) = 70+20=90.
+    ADER: single node, u=w=20 -> cdir = -sign(g)*d_ader = -(+1)*(-1) = +1
+        for both rows (same g sign, same d_ader) -> r = max(1*20,-1*-20)
+        = 20.0 for both.
+
+    headroom = max(0, min(-20, 70)) = 0.0: at x=0, any T>0 would worsen
+        the already-violated row V, so Tier 0 stays 0 by construction.
+    potential (fixed) = min(20.0, 90.0) = 20.0 -- not the old bug's 0.0.
+
+    The non-LP assertions above need no scipy; the LP cross-check below
+    does, and is isolated so the rest of the test still runs without it.
+
+    Tier-2 hand check: row V's clamped upper row is
+    "-x + T <= max(100-120,0) = 0" -> T <= x; row N's is
+    "-x + T <= max(100-30,0) = 70" -> T <= x+70. T<=x is tighter for any
+    x <= 20, so the optimum picks x=+20 (the top of the box), giving
+    T_max = 20 -- exactly the fixed Tier-1 bound in this single-
+    contingency, single-node case (the LP's one shared x also happens to
+    be each row's own best-case x here).
+    """
+    referenced_factors = np.array(
+        [
+            [[-1.0, -1.0]],  # m=0 (row V): d_ader=-1, d_poi=-1 -> g=1
+            [[-1.0, -1.0]],  # m=1 (row N): d_ader=-1, d_poi=-1 -> g=1
+        ]
+    )  # (M=2, C=1, B=2)
+    base_contingency_flow = np.array([[120.0], [30.0]])
+    limit_mw = np.array([[100.0], [100.0]])
+    valid = np.array([[True], [True]])
+    ader_bus_columns = np.array([0])
+    u = np.array([20.0])
+    w = np.array([20.0])
+
+    potential = screen_poi_potential(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_columns=[1],
+    )[0]
+
+    assert potential.headroom_mw == pytest.approx(0.0, abs=1e-9)
+    assert potential.potential_capacity_mw == pytest.approx(20.0, abs=1e-6)
+    assert potential.potential_capacity_mw > 0.0  # the bug produced exactly 0.0
+
+    pytest.importorskip("scipy")
+    recourse = poi_recourse_capacity(
+        referenced_factors,
+        base_contingency_flow,
+        limit_mw,
+        valid,
+        ader_bus_columns=ader_bus_columns,
+        ader_injection_max_mw=u,
+        ader_withdrawal_max_mw=w,
+        poi_bus_column=1,
+    )
+    assert recourse.capacity_mw == pytest.approx(20.0, abs=1e-6)
+    assert potential.headroom_mw <= recourse.capacity_mw + 1e-6
+    assert recourse.capacity_mw <= potential.potential_capacity_mw + 1e-6
+
+
 def test_co_binding_and_next_capacity_honest_tie() -> None:
     """Two identical-t0 rows: binder is the lower flat index, the other
     is a co-binder, and next_capacity equals that SAME tied value (not

@@ -464,6 +464,18 @@ def screen_poi_potential(
     every POI ``potential_capacity_mw >= headroom_mw`` and
     ``potential_unlock_mw >= 0`` by construction.
 
+    The per-pair bound uses no-worsening semantics, consistent with
+    :func:`poi_recourse_capacity`'s LP rows: a pair already violated at
+    ``x=0`` in the POI's loading direction (``t0 < 0``) is held to "no
+    worse than base", not "within limit", so it contributes ``r/|g|`` --
+    the load admissible while the dispatch holds that pair no worse than
+    base -- rather than a negative or zero value from adding relief
+    directly to an already-negative ``t0``. Tier 0 (headroom, no dispatch)
+    is unaffected by this and stays 0 in that situation by construction:
+    with ``x=0``, any ``T > 0`` would worsen the already-violated pair, so
+    the no-dispatch capacity is 0 regardless of how much relief a dispatch
+    could later buy.
+
     referenced_factors: (M, C, B) BA-referenced factors. Include the
         intact network as a column (see :func:`append_intact_contingency`)
         if it should be screened alongside contingencies.
@@ -588,7 +600,16 @@ def screen_poi_potential(
 
         abs_g = np.abs(g)
         with np.errstate(divide="ignore", invalid="ignore"):
-            t_bound = np.where(np.isfinite(t0), t0 + r / abs_g, np.inf)
+            # Clamp the headroom term at 0 before adding relief: this is
+            # what makes the bound match the LP's per-row no-worsening
+            # semantics exactly (see the docstring and
+            # poi_recourse_capacity's own RHS clamp). For a pair not
+            # already violated (t0 > 0) this is identical to t0 + r/|g|;
+            # for a pair already violated in the loading direction
+            # (t0 < 0) it becomes r/|g| -- the load admissible while the
+            # dispatch holds that pair no worse than base, not a negative
+            # or zero bound from adding relief to an already-negative t0.
+            t_bound = np.where(np.isfinite(t0), np.maximum(t0, 0.0) + r / abs_g, np.inf)
         flat_tb = t_bound.ravel()
 
         best_pot_flat = int(np.argmin(flat_tb))

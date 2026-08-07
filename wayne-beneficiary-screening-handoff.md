@@ -81,7 +81,7 @@ flow downward; the expensive tiers do the pruning.
 | Tier | What | Cost | Function |
 |---|---|---|---|
 | 0 | Headroom `T⁰`, binder `k*`, co-binders, next capacity | streaming factor math | `screen_poi_potential` (fields) |
-| 1 | **Certified potential bound** — each constraint independently gets its best-case in-box dispatch: `T_bound(k) = t0(k) + relief_max(k)/|g_k|`, `T_pot = min_k T_bound(k)` | streaming factor math | `screen_poi_potential` — **the map metric** |
+| 1 | **Certified potential bound** — each constraint independently gets its best-case in-box dispatch: `T_bound(k) = max(t0(k), 0) + relief_max(k)/|g_k|`, `T_pot = min_k T_bound(k)`. The `max(·,0)` applies the same no-worsening rule as Tier 2: a pair pre-violated in the loading direction contributes `relief/|g|` (load admissible while the dispatch holds it no worse than base), not a negative bound | streaming factor math | `screen_poi_potential` — **the map metric** |
 | 2 | Exact-in-DC recourse value: per contingency `c`, one LP `max T` s.t. all valid `m` under `c` within (no-worsening) limits, `x_c` in box; `T_l = min_c T_c_max` | tiny LPs, mostly skipped | `poi_recourse_capacity` |
 | 3 | Full AC / SCOPF with all constraints, min-ADER-set selection | expensive | production, outside Wayne |
 
