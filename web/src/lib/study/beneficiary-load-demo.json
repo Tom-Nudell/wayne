@@ -1,0 +1,641 @@
+{
+  "metadata": {
+    "study": "beneficiary_load_transfer_demo",
+    "snapshot": "snapshot_20260415_rts_gmlc",
+    "model": "DC PTDF + single-outage LODF",
+    "balance_policy": "live generator Pmax pro rata",
+    "emergency_rating_multiplier": 1.25,
+    "islanding_outages_excluded": 2,
+    "screened_constraint_pairs": 14042,
+    "ader_net_dispatch_mw": 165.0,
+    "ba_reference_dispatch_mw": -165.0
+  },
+  "ader_nodes": [
+    {
+      "bus_id": "304",
+      "name": "Caine",
+      "coordinates": [-118.563585, 34.632091],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": 50.0
+    },
+    {
+      "bus_id": "305",
+      "name": "Calvin",
+      "coordinates": [-118.510487, 34.873885],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": 25.0
+    },
+    {
+      "bus_id": "306",
+      "name": "Camus",
+      "coordinates": [-118.2762, 34.887168],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": 50.0
+    },
+    {
+      "bus_id": "307",
+      "name": "Carew",
+      "coordinates": [-118.878178, 34.101266],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": -20.0
+    },
+    {
+      "bus_id": "308",
+      "name": "Carrel",
+      "coordinates": [-118.654258, 34.224718],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": 40.0
+    },
+    {
+      "bus_id": "309",
+      "name": "Carter",
+      "coordinates": [-118.127342, 34.735758],
+      "min_dispatch_mw": -60.0,
+      "max_dispatch_mw": 60.0,
+      "dispatch_mw": 20.0
+    }
+  ],
+  "pois": [
+    {
+      "bus_id": "310",
+      "name": "Caruso",
+      "coordinates": [-118.104525, 34.729316],
+      "existing_load_mw": 195.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 416.496,
+      "unlocked_capacity_mw": 165.0,
+      "constraints": [
+        {
+          "id": "A34|A30",
+          "rank": 1,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 2,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "C17|C16",
+          "rank": 3,
+          "monitored_branch_id": "C17",
+          "outage_branch_id": "C16",
+          "monitored_coordinates": [
+            [-118.104525, 34.729316],
+            [-118.119887, 34.722963]
+          ],
+          "outage_coordinates": [
+            [-118.104525, 34.729316],
+            [-118.111933, 34.742094]
+          ],
+          "emergency_limit_mw": 500.0,
+          "base_flow_mw": -299.933,
+          "managed_flow_mw": -245.381,
+          "ader_flow_change_mw": 54.552,
+          "poi_load_factor": -0.573838,
+          "base_transfer_limit_mw": 348.647,
+          "managed_transfer_limit_mw": 443.712
+        },
+        {
+          "id": "C16|C17",
+          "rank": 4,
+          "monitored_branch_id": "C16",
+          "outage_branch_id": "C17",
+          "monitored_coordinates": [
+            [-118.104525, 34.729316],
+            [-118.111933, 34.742094]
+          ],
+          "outage_coordinates": [
+            [-118.104525, 34.729316],
+            [-118.119887, 34.722963]
+          ],
+          "emergency_limit_mw": 500.0,
+          "base_flow_mw": -289.002,
+          "managed_flow_mw": -234.132,
+          "ader_flow_change_mw": 54.87,
+          "poi_load_factor": -0.577406,
+          "base_transfer_limit_mw": 365.424,
+          "managed_transfer_limit_mw": 460.452
+        }
+      ],
+      "rank": 1
+    },
+    {
+      "bus_id": "313",
+      "name": "Cecil",
+      "coordinates": [-118.018855, 34.265268],
+      "existing_load_mw": 265.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 416.496,
+      "unlocked_capacity_mw": 165.0,
+      "constraints": [
+        {
+          "id": "A34|A30",
+          "rank": 1,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 2,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "C6|C23",
+          "rank": 3,
+          "monitored_branch_id": "C6",
+          "outage_branch_id": "C23",
+          "monitored_coordinates": [
+            [-118.04355, 35.217543],
+            [-118.127342, 34.735758]
+          ],
+          "outage_coordinates": [
+            [-117.684879, 34.944964],
+            [-117.251589, 35.138367]
+          ],
+          "emergency_limit_mw": 218.75,
+          "base_flow_mw": 36.322,
+          "managed_flow_mw": 11.424,
+          "ader_flow_change_mw": -24.898,
+          "poi_load_factor": 0.130323,
+          "base_transfer_limit_mw": 1399.818,
+          "managed_transfer_limit_mw": 1590.864
+        },
+        {
+          "id": "C6|C19",
+          "rank": 4,
+          "monitored_branch_id": "C6",
+          "outage_branch_id": "C19",
+          "monitored_coordinates": [
+            [-118.04355, 35.217543],
+            [-118.127342, 34.735758]
+          ],
+          "outage_coordinates": [
+            [-118.111933, 34.742094],
+            [-117.684879, 34.944964]
+          ],
+          "emergency_limit_mw": 218.75,
+          "base_flow_mw": 27.112,
+          "managed_flow_mw": 1.647,
+          "ader_flow_change_mw": -25.464,
+          "poi_load_factor": 0.133755,
+          "base_transfer_limit_mw": 1432.76,
+          "managed_transfer_limit_mw": 1623.139
+        }
+      ],
+      "rank": 2
+    },
+    {
+      "bus_id": "314",
+      "name": "Chain",
+      "coordinates": [-117.684879, 34.944964],
+      "existing_load_mw": 194.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 416.496,
+      "unlocked_capacity_mw": 165.0,
+      "constraints": [
+        {
+          "id": "A34|A30",
+          "rank": 1,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 2,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "C19|C23",
+          "rank": 3,
+          "monitored_branch_id": "C19",
+          "outage_branch_id": "C23",
+          "monitored_coordinates": [
+            [-118.111933, 34.742094],
+            [-117.684879, 34.944964]
+          ],
+          "outage_coordinates": [
+            [-117.684879, 34.944964],
+            [-117.251589, 35.138367]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": 45.651,
+          "managed_flow_mw": 48.458,
+          "ader_flow_change_mw": 2.807,
+          "poi_load_factor": 0.982989,
+          "base_transfer_limit_mw": 589.375,
+          "managed_transfer_limit_mw": 586.519
+        },
+        {
+          "id": "C23|C19",
+          "rank": 4,
+          "monitored_branch_id": "C23",
+          "outage_branch_id": "C19",
+          "monitored_coordinates": [
+            [-117.684879, 34.944964],
+            [-117.251589, 35.138367]
+          ],
+          "outage_coordinates": [
+            [-118.111933, 34.742094],
+            [-117.684879, 34.944964]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -45.651,
+          "managed_flow_mw": -48.458,
+          "ader_flow_change_mw": -2.807,
+          "poi_load_factor": -0.982989,
+          "base_transfer_limit_mw": 589.375,
+          "managed_transfer_limit_mw": 586.519
+        }
+      ],
+      "rank": 3
+    },
+    {
+      "bus_id": "319",
+      "name": "Clay",
+      "coordinates": [-117.12442, 34.917631],
+      "existing_load_mw": 181.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 416.496,
+      "unlocked_capacity_mw": 165.0,
+      "constraints": [
+        {
+          "id": "A34|A30",
+          "rank": 1,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 2,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "C28|CB-1",
+          "rank": 3,
+          "monitored_branch_id": "C28",
+          "outage_branch_id": "CB-1",
+          "monitored_coordinates": [
+            [-117.251589, 35.138367],
+            [-117.12442, 34.917631]
+          ],
+          "outage_coordinates": [
+            [-116.976571, 35.505813],
+            [-115.536446, 35.82435]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": 364.353,
+          "managed_flow_mw": 389.763,
+          "ader_flow_change_mw": 25.41,
+          "poi_load_factor": 0.349576,
+          "base_transfer_limit_mw": 745.609,
+          "managed_transfer_limit_mw": 672.922
+        },
+        {
+          "id": "C28|C32-1",
+          "rank": 4,
+          "monitored_branch_id": "C28",
+          "outage_branch_id": "C32-1",
+          "monitored_coordinates": [
+            [-117.251589, 35.138367],
+            [-117.12442, 34.917631]
+          ],
+          "outage_coordinates": [
+            [-117.12442, 34.917631],
+            [-117.063508, 34.462466]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -32.815,
+          "managed_flow_mw": -35.103,
+          "ader_flow_change_mw": -2.288,
+          "poi_load_factor": 0.577258,
+          "base_transfer_limit_mw": 1139.552,
+          "managed_transfer_limit_mw": 1143.515
+        }
+      ],
+      "rank": 4
+    },
+    {
+      "bus_id": "315",
+      "name": "Chase",
+      "coordinates": [-117.386434, 35.26597],
+      "existing_load_mw": 317.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 362.65,
+      "unlocked_capacity_mw": 111.154,
+      "constraints": [
+        {
+          "id": "C29|C24",
+          "rank": 1,
+          "monitored_branch_id": "C29",
+          "outage_branch_id": "C24",
+          "monitored_coordinates": [
+            [-117.055829, 35.378433],
+            [-116.976571, 35.505813]
+          ],
+          "outage_coordinates": [
+            [-117.386434, 35.26597],
+            [-117.251589, 35.138367]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": 495.471,
+          "managed_flow_mw": 519.633,
+          "ader_flow_change_mw": 24.161,
+          "poi_load_factor": 0.290548,
+          "base_transfer_limit_mw": 445.807,
+          "managed_transfer_limit_mw": 362.65
+        },
+        {
+          "id": "A34|A30",
+          "rank": 2,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 3,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "C24|C29",
+          "rank": 4,
+          "monitored_branch_id": "C24",
+          "outage_branch_id": "C29",
+          "monitored_coordinates": [
+            [-117.386434, 35.26597],
+            [-117.251589, 35.138367]
+          ],
+          "outage_coordinates": [
+            [-117.055829, 35.378433],
+            [-116.976571, 35.505813]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -364.386,
+          "managed_flow_mw": -382.383,
+          "ader_flow_change_mw": -17.997,
+          "poi_load_factor": -0.49229,
+          "base_transfer_limit_mw": 529.392,
+          "managed_transfer_limit_mw": 492.833
+        }
+      ],
+      "rank": 5
+    },
+    {
+      "bus_id": "303",
+      "name": "Caesar",
+      "coordinates": [-118.04355, 35.217543],
+      "existing_load_mw": 180.0,
+      "base_capacity_mw": 251.496,
+      "managed_capacity_mw": 299.539,
+      "unlocked_capacity_mw": 48.042,
+      "constraints": [
+        {
+          "id": "C6|C7",
+          "rank": 1,
+          "monitored_branch_id": "C6",
+          "outage_branch_id": "C7",
+          "monitored_coordinates": [
+            [-118.04355, 35.217543],
+            [-118.127342, 34.735758]
+          ],
+          "outage_coordinates": [
+            [-118.04355, 35.217543],
+            [-118.034817, 35.206582]
+          ],
+          "emergency_limit_mw": 218.75,
+          "base_flow_mw": -29.433,
+          "managed_flow_mw": -27.996,
+          "ader_flow_change_mw": 1.437,
+          "poi_load_factor": -0.636825,
+          "base_transfer_limit_mw": 297.282,
+          "managed_transfer_limit_mw": 299.539
+        },
+        {
+          "id": "C6|C26",
+          "rank": 2,
+          "monitored_branch_id": "C6",
+          "outage_branch_id": "C26",
+          "monitored_coordinates": [
+            [-118.04355, 35.217543],
+            [-118.127342, 34.735758]
+          ],
+          "outage_coordinates": [
+            [-117.386434, 35.26597],
+            [-118.034817, 35.206582]
+          ],
+          "emergency_limit_mw": 218.75,
+          "base_flow_mw": 32.646,
+          "managed_flow_mw": 32.909,
+          "ader_flow_change_mw": 0.263,
+          "poi_load_factor": -0.629707,
+          "base_transfer_limit_mw": 399.228,
+          "managed_transfer_limit_mw": 399.645
+        },
+        {
+          "id": "A34|A30",
+          "rank": 3,
+          "monitored_branch_id": "A34",
+          "outage_branch_id": "A30",
+          "monitored_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        },
+        {
+          "id": "A30|A34",
+          "rank": 4,
+          "monitored_branch_id": "A30",
+          "outage_branch_id": "A34",
+          "monitored_coordinates": [
+            [-115.640809, 33.575233],
+            [-116.324347, 32.818864]
+          ],
+          "outage_coordinates": [
+            [-116.070778, 33.527121],
+            [-116.324347, 32.818864]
+          ],
+          "emergency_limit_mw": 625.0,
+          "base_flow_mw": -607.481,
+          "managed_flow_mw": -595.988,
+          "ader_flow_change_mw": 11.493,
+          "poi_load_factor": -0.069657,
+          "base_transfer_limit_mw": 251.496,
+          "managed_transfer_limit_mw": 416.496
+        }
+      ],
+      "rank": 6
+    }
+  ]
+}

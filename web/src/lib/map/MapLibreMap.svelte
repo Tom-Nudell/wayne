@@ -33,6 +33,12 @@
     lmpDomain?: { min: number; max: number } | null;
     /** Reports clicks on LMP bus points (for the what-if slider). */
     onSelectLmpBus?: (busId: string, lmp: number) => void;
+    /** ADER / beneficiary POI / active constraint features for the transfer demo. */
+    beneficiaryOverlay?: FeatureCollection | null;
+    /** Reports clicks on beneficiary POI points. */
+    onSelectBeneficiaryPoi?: (busId: string) => void;
+    /** A stable run id; changing it fits the map to the demo study once. */
+    beneficiaryStudyKey?: string | null;
   }
 
   const {
@@ -43,7 +49,10 @@
     studyOverlayUrl = null,
     lmpOverlay = null,
     lmpDomain = null,
-    onSelectLmpBus
+    onSelectLmpBus,
+    beneficiaryOverlay = null,
+    onSelectBeneficiaryPoi,
+    beneficiaryStudyKey = null
   }: Props = $props();
 
   const OVERLAY_SOURCE = 'wayne-study-overlay';
@@ -51,6 +60,11 @@
   const LMP_SOURCE = 'wayne-lmp-overlay';
   const LMP_POINT_LAYER = 'wayne-lmp-points';
   const LMP_BINDING_LAYER = 'wayne-lmp-binding';
+  const BENEFICIARY_SOURCE = 'wayne-beneficiary-load';
+  const BENEFICIARY_OUTAGE_LAYER = 'wayne-beneficiary-outages';
+  const BENEFICIARY_CONSTRAINT_LAYER = 'wayne-beneficiary-constraints';
+  const BENEFICIARY_ADER_LAYER = 'wayne-beneficiary-ader';
+  const BENEFICIARY_POI_LAYER = 'wayne-beneficiary-pois';
 
   // Sequential price ramp: cool teal (cheap) → parchment → alarm red
   // (expensive). Saturated colors are reserved for overlays, which this is.
@@ -152,6 +166,23 @@
     mapInstance.on('mouseleave', LMP_POINT_LAYER, () => {
       mapInstance.getCanvas().style.cursor = '';
     });
+
+    // Beneficiary POIs are the map-side selector for the transfer slider.
+    mapInstance.on(
+      'click',
+      BENEFICIARY_POI_LAYER,
+      (e: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
+        const f = e.features?.[0];
+        if (!f || !onSelectBeneficiaryPoi) return;
+        onSelectBeneficiaryPoi(String(f.properties?.bus_id ?? ''));
+      }
+    );
+    mapInstance.on('mouseenter', BENEFICIARY_POI_LAYER, () => {
+      mapInstance.getCanvas().style.cursor = 'pointer';
+    });
+    mapInstance.on('mouseleave', BENEFICIARY_POI_LAYER, () => {
+      mapInstance.getCanvas().style.cursor = '';
+    });
   });
 
   onDestroy(() => {
@@ -171,6 +202,158 @@
         // Layer may not be ready yet on first render; safe to ignore.
       }
     }
+  });
+
+  // Beneficiary-load demo. Only the selected POI's limiting monitored and
+  // outage branches are included in the collection, so a slider update is a
+  // cheap setData() and cannot be mistaken for a physical ADER-to-POI path.
+  $effect(() => {
+    const m = map;
+    const collection = beneficiaryOverlay;
+    if (!m) return;
+    const remove = () => {
+      if (m.getLayer(BENEFICIARY_POI_LAYER)) m.removeLayer(BENEFICIARY_POI_LAYER);
+      if (m.getLayer(BENEFICIARY_ADER_LAYER)) m.removeLayer(BENEFICIARY_ADER_LAYER);
+      if (m.getLayer(BENEFICIARY_CONSTRAINT_LAYER)) {
+        m.removeLayer(BENEFICIARY_CONSTRAINT_LAYER);
+      }
+      if (m.getLayer(BENEFICIARY_OUTAGE_LAYER)) m.removeLayer(BENEFICIARY_OUTAGE_LAYER);
+      if (m.getSource(BENEFICIARY_SOURCE)) m.removeSource(BENEFICIARY_SOURCE);
+    };
+    const apply = () => {
+      if (!collection) {
+        remove();
+        return;
+      }
+      const existing = m.getSource(BENEFICIARY_SOURCE) as GeoJSONSource | undefined;
+      if (existing) {
+        existing.setData(collection);
+        return;
+      }
+      m.addSource(BENEFICIARY_SOURCE, { type: 'geojson', data: collection });
+      m.addLayer({
+        id: BENEFICIARY_OUTAGE_LAYER,
+        type: 'line',
+        source: BENEFICIARY_SOURCE,
+        filter: ['==', ['get', 'kind'], 'beneficiary-outage'],
+        paint: {
+          'line-color': PALETTE.heartwood,
+          'line-width': 2,
+          'line-dasharray': [1.5, 1.5],
+          'line-opacity': 0.65
+        }
+      });
+      m.addLayer({
+        id: BENEFICIARY_CONSTRAINT_LAYER,
+        type: 'line',
+        source: BENEFICIARY_SOURCE,
+        filter: ['==', ['get', 'kind'], 'beneficiary-constraint'],
+        paint: {
+          'line-color': [
+            'case',
+            ['>', ['get', 'projected_loading_pct'], 100],
+            PALETTE.overload,
+            PALETTE.mitigation
+          ],
+          'line-width': ['interpolate', ['linear'], ['get', 'rank'], 1, 5, 4, 2.5],
+          'line-opacity': 0.92
+        }
+      });
+      m.addLayer({
+        id: BENEFICIARY_ADER_LAYER,
+        type: 'circle',
+        source: BENEFICIARY_SOURCE,
+        filter: ['==', ['get', 'kind'], 'ader'],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 4, 5, 9, 9],
+          'circle-color': [
+            'case',
+            ['>=', ['get', 'dispatch_mw'], 0],
+            PALETTE.moss,
+            PALETTE.heartwood
+          ],
+          'circle-stroke-color': PALETTE.paper,
+          'circle-stroke-width': 2,
+          'circle-opacity': 0.95
+        }
+      });
+      m.addLayer({
+        id: BENEFICIARY_POI_LAYER,
+        type: 'circle',
+        source: BENEFICIARY_SOURCE,
+        filter: ['==', ['get', 'kind'], 'beneficiary-poi'],
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'unlocked_capacity_mw'],
+            0,
+            6,
+            180,
+            13
+          ],
+          'circle-color': [
+            'case',
+            ['==', ['get', 'selected'], true],
+            PALETTE.paper,
+            PALETTE.mitigation
+          ],
+          'circle-stroke-color': [
+            'case',
+            ['==', ['get', 'selected'], true],
+            PALETTE.mitigation,
+            PALETTE.loam900
+          ],
+          'circle-stroke-width': ['case', ['==', ['get', 'selected'], true], 4, 1.2],
+          'circle-opacity': 0.96
+        }
+      });
+    };
+    try {
+      apply();
+    } catch {
+      m.once('idle', () => {
+        try {
+          apply();
+        } catch {
+          // Style never became ready; nothing to draw.
+        }
+      });
+    }
+  });
+
+  let lastBeneficiaryStudyKey: string | null = null;
+  $effect(() => {
+    const m = map;
+    const key = beneficiaryStudyKey;
+    const collection = beneficiaryOverlay;
+    if (!m || !key || !collection || key === lastBeneficiaryStudyKey) return;
+    const coordinates: [number, number][] = [];
+    for (const feature of collection.features) {
+      if (feature.geometry?.type === 'Point') {
+        coordinates.push(feature.geometry.coordinates as [number, number]);
+      } else if (feature.geometry?.type === 'LineString') {
+        coordinates.push(...(feature.geometry.coordinates as [number, number][]));
+      }
+    }
+    if (!coordinates.length) return;
+    lastBeneficiaryStudyKey = key;
+    const longitudes = coordinates.map(([longitude]) => longitude);
+    const latitudes = coordinates.map(([, latitude]) => latitude);
+    const compact = window.innerWidth < 700;
+    m.fitBounds(
+      [
+        [Math.min(...longitudes), Math.min(...latitudes)],
+        [Math.max(...longitudes), Math.max(...latitudes)]
+      ],
+      {
+        padding: compact
+          ? { top: 70, right: 35, bottom: 260, left: 35 }
+          : { top: 65, right: 430, bottom: 65, left: 245 },
+        maxZoom: 8,
+        duration: 900
+      }
+    );
   });
 
   // Study overlay: agent-discovered N-1 overloads as a GeoJSON line layer.
